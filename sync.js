@@ -5,6 +5,7 @@
 // tenía una sola lista activa por dispositivo).
 window.Sync = (function () {
   const GRUPO_ID_KEY = 'bona_consumos_grupo_id';
+  const ALIAS_KEY = 'bona_consumos_alias';
   const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
   let sb = null;
@@ -76,6 +77,34 @@ window.Sync = (function () {
   }
 
   function getUser() { return currentUser; }
+
+  // ---- Alias (nombre para mostrar, global — no por grupo) ----
+
+  function getMyAlias() {
+    try { return localStorage.getItem(ALIAS_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  // Usado como display_name al insertar una fila nueva en gc_miembros
+  // (crear/unirse a un grupo): si ya seteaste un alias antes de sumarte a
+  // ese grupo, arranca mostrando eso en vez del email.
+  function myDisplayNameDefault() {
+    return getMyAlias() || (currentUser ? currentUser.email : '');
+  }
+
+  // Actualiza el alias en TODAS las filas de gc_miembros del usuario actual
+  // (todos los grupos a la vez, no solo el activo) — el alias es un dato de
+  // cuenta, no de un grupo en particular, aunque técnicamente esté
+  // desnormalizado por fila de membresía (mismo esquema que ls_miembros en
+  // lista-super, no hay tabla de perfil global).
+  async function updateMyDisplayName(alias) {
+    if (!sb || !currentUser) throw new Error('Iniciá sesión primero');
+    const limpio = (alias || '').trim();
+    const valor = limpio || currentUser.email;
+    try { localStorage.setItem(ALIAS_KEY, limpio); } catch (e) {}
+    const { error } = await sb.from('gc_miembros').update({ display_name: valor }).eq('usuario_id', currentUser.id);
+    if (error) throw error;
+    if (grupoId) await pullNow();
+  }
 
   // ---- Mis grupos (lista + balance neto de cada uno) ----
 
@@ -162,7 +191,7 @@ window.Sync = (function () {
     });
     if (error) throw error;
     const { error: memErr } = await sb.from('gc_miembros').insert({
-      grupo_id: id, usuario_id: currentUser.id, display_name: currentUser.email,
+      grupo_id: id, usuario_id: currentUser.id, display_name: myDisplayNameDefault(),
     });
     if (memErr) throw memErr;
     await selectGrupo(id);
@@ -174,7 +203,7 @@ window.Sync = (function () {
     const id = extractGrupoId(rawInput);
     if (!id) throw new Error('No reconocí un código/link de grupo válido ahí');
     const { error } = await sb.from('gc_miembros').insert({
-      grupo_id: id, usuario_id: currentUser.id, display_name: currentUser.email,
+      grupo_id: id, usuario_id: currentUser.id, display_name: myDisplayNameDefault(),
     });
     if (error) throw error;
     await selectGrupo(id);
@@ -291,7 +320,7 @@ window.Sync = (function () {
       nota: s.nota,
     }));
 
-    const categoriasCustom = categoriasRes.data.map((c) => c.nombre);
+    const categoriasCustom = categoriasRes.data.map((c) => ({ nombre: c.nombre, icono: c.icono }));
     const miembros = miembrosRes.data.map((m) => ({
       usuarioId: m.usuario_id, displayName: m.display_name,
     }));
@@ -411,10 +440,10 @@ window.Sync = (function () {
     await pullNow();
   }
 
-  async function addCategoriaCustom(nombre) {
+  async function addCategoriaCustom(nombre, icono) {
     if (!sb || !grupoId) throw new Error('No hay grupo activo');
     const { error } = await sb.from('gc_categorias').insert({
-      id: crypto.randomUUID(), grupo_id: grupoId, nombre,
+      id: crypto.randomUUID(), grupo_id: grupoId, nombre, icono: icono || null,
     });
     if (error) {
       if (error.code === '23505') throw new Error('Esa categoría ya existe en este grupo');
@@ -450,6 +479,8 @@ window.Sync = (function () {
     verifyOtp,
     signOut,
     getUser,
+    getMyAlias,
+    updateMyDisplayName,
     listMyGrupos,
     getGrupoId,
     getGrupoInfo,

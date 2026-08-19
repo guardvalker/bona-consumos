@@ -30,6 +30,9 @@
     --ctp-teal: #94e2d5;
     --ctp-blue: #89b4fa;
     --ctp-mauve: #cba6f7;
+    --ctp-pink: #f5c2e7;
+    --ctp-sky: #89dceb;
+    --ctp-lavender: #b4befe;
 
     --bg: #1e1e2e;
     --card: #313244;
@@ -53,6 +56,9 @@
     --ctp-teal: #179299;
     --ctp-blue: #1e66f5;
     --ctp-mauve: #8839ef;
+    --ctp-pink: #ea76cb;
+    --ctp-sky: #04a5e5;
+    --ctp-lavender: #7287fd;
 
     --bg: #eff1f5;
     --card: #ffffff;
@@ -179,6 +185,7 @@
   .gasto-row {
     display: flex; align-items: center; gap: 0.7rem;
     background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    border-left: 4px solid var(--payer-color, var(--border));
     padding: 0.75rem 0.85rem; margin-bottom: 0.55rem;
   }
   .gasto-row .cat-icon {
@@ -188,9 +195,22 @@
   .gasto-row .cat-icon svg { width: 19px; height: 19px; color: var(--accent); }
   .gasto-row .mid { flex: 1; min-width: 0; }
   .gasto-row .desc { font-weight: 600; font-size: 0.94rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gasto-row .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.15rem; }
+  .gasto-row .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.15rem; display: flex; align-items: center; gap: 0.35rem; }
+  .payer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--payer-color, var(--text-dim)); flex-shrink: 0; }
   .gasto-row .monto { font-weight: 700; font-size: 0.94rem; text-align: right; white-space: nowrap; }
   .gasto-row .monto small { display: block; font-weight: 400; color: var(--text-dim); font-size: 0.7rem; }
+
+  .category-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.4rem;
+  }
+  .category-tile {
+    aspect-ratio: 1; background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 14px; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 0.4rem; color: var(--text-dim); padding: 0.5rem;
+  }
+  .category-tile.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .category-tile svg { width: 24px; height: 24px; }
+  .category-tile span { font-size: 0.78rem; font-weight: 600; text-align: center; line-height: 1.2; }
 
   .fab {
     position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%);
@@ -317,8 +337,15 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.5.0';
   const CHANGELOG = [
+    { version: '1.5.0', fecha: '2026-08-19', notas: [
+      'Alias de miembro (en Ajustes) — reemplaza el email en todos los grupos.',
+      'Gastos con color según quién los pagó, para distinguirlos de un vistazo.',
+      'Categorías rediseñadas: módulos cuadrados con ícono, se movió la descripción justo debajo y se autocompleta al elegir categoría.',
+      'Nuevas categorías predeterminadas: Salidas, Super, Servicios, Transporte.',
+      'Categorías custom ahora eligen ícono de un set predefinido, no un ícono genérico.',
+    ] },
     { version: '1.4.0', fecha: '2026-08-19', notas: [
       'Ajustes: se saca la palabra "Ajustes" (redundante con el engranaje).',
       'Toggle de tema único (sol/luna) junto a la ✕, reemplaza los chips Claro/Oscuro.',
@@ -340,23 +367,60 @@
     ] },
   ];
 
-  const CATEGORY_ICONS = {
-    Comida: '<path d="M6 2v7a2 2 0 0 0 2 2v11M6 2v9M10 2v9M10 2v20M18 2c-2.2 0-4 3.6-4 8s1.8 8 4 8 4-3.6 4-8-1.8-8-4-8z"/>',
-    Transporte: '<path d="M3 13l1.5-6A2 2 0 0 1 6.4 5.5h11.2a2 2 0 0 1 1.9 1.5L21 13"/><rect x="2" y="13" width="20" height="6" rx="1.5"/><circle cx="6.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/>',
-    Alojamiento: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
-    Entretenimiento: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19M8 5v14M16 5v14"/>',
-    Servicios: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3.4 3.4-2-2 3.4-3.4z"/>',
-    Otros: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
-    _default: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  // Set fijo de íconos generados (sin emoji): las 4 categorías predefinidas
+  // usan claves puntuales, y el resto queda disponible como opciones para
+  // el picker al crear una categoría custom (ver ICON_PICKER_KEYS).
+  const ICON_LIBRARY = {
+    fork: '<path d="M6 2v7a2 2 0 0 0 2 2v11M6 2v9M10 2v9M10 2v20M18 2c-2.2 0-4 3.6-4 8s1.8 8 4 8 4-3.6 4-8-1.8-8-4-8z"/>',
+    cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
+    wrench: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3.4 3.4-2-2 3.4-3.4z"/>',
+    bus: '<path d="M3 13l1.5-6A2 2 0 0 1 6.4 5.5h11.2a2 2 0 0 1 1.9 1.5L21 13"/><rect x="2" y="13" width="20" height="6" rx="1.5"/><circle cx="6.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/>',
+    home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
+    gift: '<rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/>',
+    plane: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>',
+    dots: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   };
+  const ICON_LABELS = {
+    fork: 'Salidas', cart: 'Super', wrench: 'Servicios', bus: 'Transporte',
+    home: 'Hogar', gift: 'Regalos', heart: 'Salud', plane: 'Viajes', dots: 'Otro',
+  };
+  const ICON_PICKER_KEYS = ['home', 'gift', 'heart', 'plane', 'cart', 'fork', 'wrench', 'bus', 'dots'];
+  const CATEGORY_ICON_KEY = { Salidas: 'fork', Super: 'cart', Servicios: 'wrench', Transporte: 'bus' };
 
-  function icon(name, extraClass) {
-    const inner = CATEGORY_ICONS[name] || CATEGORY_ICONS._default;
+  function iconKeyFor(categoriaNombre) {
+    if (CATEGORY_ICON_KEY[categoriaNombre]) return CATEGORY_ICON_KEY[categoriaNombre];
+    const custom = categoriasCustom.find((c) => c.nombre === categoriaNombre);
+    if (custom && custom.icono && ICON_LIBRARY[custom.icono]) return custom.icono;
+    return 'dots';
+  }
+
+  function svgForKey(key, extraClass) {
+    const inner = ICON_LIBRARY[key] || ICON_LIBRARY.dots;
     return `<svg class="${extraClass || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
   }
 
+  function icon(categoriaNombre, extraClass) {
+    return svgForKey(iconKeyFor(categoriaNombre), extraClass);
+  }
+
   function todasCategorias() {
-    return L.CATEGORIAS_DEFAULT.concat(categoriasCustom.filter((c) => !L.CATEGORIAS_DEFAULT.includes(c)));
+    const nombresCustom = categoriasCustom.map((c) => c.nombre).filter((n) => !L.CATEGORIAS_DEFAULT.includes(n));
+    return L.CATEGORIAS_DEFAULT.concat(nombresCustom);
+  }
+
+  // ---- Color por quién pagó (para diferenciar gastos de un vistazo) ----
+  // Por posición en `miembros` (no por hash del uuid): así dos miembros del
+  // mismo grupo nunca coinciden en color mientras el grupo tenga ≤8
+  // integrantes — un hash de string puede colisionar (un polinomio simple
+  // mod 8 incluso colisiona sistemáticamente con UUIDs de dígito repetido,
+  // lo cual detectó un test real acá), y lo único que importa de verdad es
+  // que los colores se distingan dentro del grupo, no que sean estables
+  // entre grupos distintos.
+  const PAYER_COLOR_VARS = ['--ctp-blue', '--ctp-mauve', '--ctp-peach', '--ctp-teal', '--ctp-yellow', '--ctp-pink', '--ctp-sky', '--ctp-lavender'];
+  function colorForUser(usuarioId) {
+    const idx = miembros.findIndex((m) => m.usuarioId === usuarioId);
+    return `var(${PAYER_COLOR_VARS[(idx >= 0 ? idx : 0) % PAYER_COLOR_VARS.length]})`;
   }
 
   function fmt(amount, currency) {
@@ -515,12 +579,13 @@
     const gastosHtml = gastosFiltrados.length
       ? gastosFiltrados.map((g) => {
           const distinta = g.moneda !== moneda;
+          const colorPagador = colorForUser(g.pagadoPor);
           return `
-            <div class="gasto-row" data-edit-gasto="${g.id}">
+            <div class="gasto-row" data-edit-gasto="${g.id}" style="--payer-color:${colorPagador}">
               <div class="cat-icon">${icon(g.categoria)}</div>
               <div class="mid">
                 <div class="desc">${escapeHtml(g.descripcion)}</div>
-                <div class="meta">${escapeHtml(displayName(g.pagadoPor))} pagó · ${formatFecha(g.fecha)}</div>
+                <div class="meta"><span class="payer-dot"></span>${escapeHtml(displayName(g.pagadoPor))} pagó · ${formatFecha(g.fecha)}</div>
               </div>
               <div class="monto">${fmt(g.montoBase, moneda)}${distinta ? `<small>${fmt(g.monto, g.moneda)}</small>` : ''}</div>
             </div>`;
@@ -603,7 +668,7 @@
     else if (overlay.type === 'versiones') body.innerHTML = renderVersionesOverlay();
     else if (overlay.type === 'gasto') body.innerHTML = renderGastoOverlay(overlay);
     else if (overlay.type === 'settle') body.innerHTML = renderSettleOverlay(overlay);
-    else if (overlay.type === 'nuevaCategoria') body.innerHTML = renderNuevaCategoriaOverlay();
+    else if (overlay.type === 'nuevaCategoria') body.innerHTML = renderNuevaCategoriaOverlay(overlay);
   }
 
   function renderGruposOverlay() {
@@ -707,6 +772,12 @@
         </div>
       </div>
 
+      <label>Tu alias</label>
+      <input type="text" id="aliasInput" value="${escapeHtml(window.Sync.getMyAlias())}" placeholder="${escapeHtml(user ? user.email : '')}">
+      <div class="btn-block-row">
+        <button class="btn btn-secondary" id="btnGuardarAlias">Guardar alias</button>
+      </div>
+
       <div class="btn-block-row" style="margin-top:2rem">
         <button class="btn btn-danger" id="btnLogout">Cerrar sesión</button>
       </div>`;
@@ -723,11 +794,17 @@
       <div class="version-list">${entradas}</div>`;
   }
 
-  function renderNuevaCategoriaOverlay() {
+  function renderNuevaCategoriaOverlay(ov) {
+    const draft = ov.draft;
+    const tiles = ICON_PICKER_KEYS.map((k) =>
+      `<button class="category-tile ${draft.icono === k ? 'active' : ''}" data-set-nueva-cat-icono="${k}">${svgForKey(k)}<span>${ICON_LABELS[k]}</span></button>`
+    ).join('');
     return `
       <div class="sheet-header"><h2>Nueva categoría</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
       <label>Nombre</label>
-      <input type="text" id="nuevaCatInput" placeholder="Ej: Mascotas">
+      <input type="text" id="nuevaCatInput" value="${escapeHtml(draft.nombre)}" placeholder="Ej: Mascotas">
+      <label>Ícono</label>
+      <div class="category-grid">${tiles}</div>
       <div class="btn-block-row">
         <button class="btn btn-primary" id="btnConfirmarNuevaCategoria">Agregar</button>
       </div>`;
@@ -742,9 +819,9 @@
     const moneda = grupoActivo.monedaBase;
     const categorias = todasCategorias();
 
-    const catChips = categorias.map((c) =>
-      `<button class="chip ${draft.categoria === c ? 'active' : ''}" data-set-categoria="${escapeHtml(c)}">${icon(c)} ${escapeHtml(c)}</button>`
-    ).join('') + `<button class="chip" id="btnNuevaCategoria">+ nueva</button>`;
+    const catTiles = categorias.map((c) =>
+      `<button class="category-tile ${draft.categoria === c ? 'active' : ''}" data-set-categoria="${escapeHtml(c)}">${icon(c)}<span>${escapeHtml(c)}</span></button>`
+    ).join('') + `<button class="category-tile" id="btnNuevaCategoria"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Nueva</span></button>`;
 
     const pagadorOpts = miembros.map((m) =>
       `<option value="${m.usuarioId}" ${draft.pagadoPor === m.usuarioId ? 'selected' : ''}>${escapeHtml(displayName(m.usuarioId))}</option>`
@@ -816,11 +893,11 @@
         <div class="split-sum-hint">≈ ${fmt((Number(draft.monto) || 0) * (Number(draft.tasaCambio) || 0), moneda)}</div>
       ` : ''}
 
+      <label>Categoría</label>
+      <div class="category-grid">${catTiles}</div>
+
       <label>Descripción</label>
       <input type="text" id="gDescripcion" value="${escapeHtml(draft.descripcion)}" placeholder="Ej: Supermercado">
-
-      <label>Categoría</label>
-      <div class="chips">${catChips}</div>
 
       <label>¿Quién pagó?</label>
       <select id="gPagador">${pagadorOpts}</select>
@@ -1008,6 +1085,15 @@
     });
     on('#btnCerrarOverlay', 'click', () => closeOverlay());
 
+    on('#btnGuardarAlias', 'click', async () => {
+      const alias = (document.getElementById('aliasInput').value || '').trim();
+      try {
+        await window.Sync.updateMyDisplayName(alias);
+        toast('Alias actualizado');
+        render();
+      } catch (e) { toast(e.message || 'No se pudo actualizar el alias'); }
+    });
+
     on('#btnCopiarLink', 'click', async () => {
       const link = window.Sync.getShareLink();
       try { await navigator.clipboard.writeText(link); toast('Link copiado'); }
@@ -1046,19 +1132,29 @@
 
     on('#btnNuevaCategoria', 'click', (el, ev) => {
       ev.preventDefault();
-      openOverlay({ type: 'nuevaCategoria', prevOverlay: overlay });
+      openOverlay({ type: 'nuevaCategoria', prevOverlay: overlay, draft: { nombre: '', icono: 'dots' } });
+    });
+    on('#nuevaCatInput', 'input', (el) => {
+      if (!overlay || overlay.type !== 'nuevaCategoria') return;
+      overlay.draft.nombre = el.value;
+    });
+    on('[data-set-nueva-cat-icono]', 'click', (el) => {
+      if (!overlay || overlay.type !== 'nuevaCategoria') return;
+      overlay.draft.icono = el.getAttribute('data-set-nueva-cat-icono');
+      render();
     });
     on('#btnConfirmarNuevaCategoria', 'click', async () => {
-      const nombre = (document.getElementById('nuevaCatInput').value || '').trim();
+      const nombre = (overlay.draft.nombre || '').trim();
       if (!nombre) return toast('Ponele un nombre');
       try {
         // addCategoriaCustom ya espera a pullNow() internamente, así que
         // categoriasCustom llega actualizado (vía onRemoteData) antes de
         // este punto — no hace falta (ni conviene, duplicaría la entrada)
         // empujarla acá también.
-        await window.Sync.addCategoriaCustom(nombre);
+        await window.Sync.addCategoriaCustom(nombre, overlay.draft.icono);
         overlay = overlay.prevOverlay;
         overlay.draft.categoria = nombre;
+        overlay.draft.descripcion = nombre;
         render();
       } catch (e) { toast(e.message || 'No se pudo agregar'); }
     });
@@ -1086,7 +1182,9 @@
 
     on('[data-set-categoria]', 'click', (el) => {
       if (!overlay || overlay.type !== 'gasto') return;
-      overlay.draft.categoria = el.getAttribute('data-set-categoria');
+      const categoria = el.getAttribute('data-set-categoria');
+      overlay.draft.categoria = categoria;
+      overlay.draft.descripcion = categoria;
       render();
     });
 

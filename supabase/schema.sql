@@ -53,12 +53,16 @@ create table if not exists gc_miembros (
 );
 
 -- Solo categorías custom agregadas por un grupo más allá del set predefinido
--- (Comida, Transporte, Alojamiento, Entretenimiento, Servicios, Otros), que
--- vive como constante en el cliente, no acá.
+-- (Salidas, Super, Servicios, Transporte), que vive como constante en el
+-- cliente, no acá. `icono` guarda una clave del ICON_LIBRARY del cliente
+-- (ej. 'cart', 'home', 'gift'), no un SVG — el picker de íconos al crear una
+-- categoría custom ofrece un set fijo predefinido, ver ICON_LIBRARY en
+-- index.html.
 create table if not exists gc_categorias (
   id uuid primary key default gen_random_uuid(),
   grupo_id uuid not null references gc_grupos(id) on delete cascade,
   nombre text not null,
+  icono text,
   creado_en timestamptz not null default now(),
   unique (grupo_id, nombre)
 );
@@ -164,12 +168,16 @@ create policy "gc_grupos_delete" on gc_grupos
 
 -- gc_miembros: ver miembros de tus propios grupos; unirte a un grupo
 -- (insertar tu propia fila — "unirse" = conocer el grupo_id compartido por
--- link); salir vos mismo.
+-- link); salir vos mismo; editar tu propia fila (alias/display_name) en
+-- cualquier grupo del que seas miembro, nunca la de otro.
 create policy "gc_miembros_select" on gc_miembros
   for select using (gc_is_member(grupo_id));
 
 create policy "gc_miembros_insert" on gc_miembros
   for insert with check (usuario_id = auth.uid());
+
+create policy "gc_miembros_update" on gc_miembros
+  for update using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
 create policy "gc_miembros_delete" on gc_miembros
   for delete using (usuario_id = auth.uid());
@@ -201,3 +209,20 @@ create policy "gc_gasto_shares_all" on gc_gasto_shares
 
 alter publication supabase_realtime add table
   gc_gastos, gc_gasto_shares, gc_settlements, gc_miembros, gc_categorias;
+
+-- ----------------------------------------------------------------------------
+-- MIGRACIÓN 2026-08-19: alias de miembro + íconos de categoría custom.
+--
+-- Todo lo de arriba ya corrió en el proyecto `bonapps` en vivo (2026-08-19) —
+-- volver a pegar el archivo completo desde el principio fallaría en los
+-- `create policy` ya existentes (Postgres no tiene `create policy if not
+-- exists`). Este bloque sí es seguro de pegar y correr solo, tanto en el
+-- proyecto ya existente como en un setup nuevo desde cero (por eso también
+-- queda acá aunque las tablas de arriba ya lo tengan incorporado).
+-- ----------------------------------------------------------------------------
+
+alter table gc_categorias add column if not exists icono text;
+
+drop policy if exists "gc_miembros_update" on gc_miembros;
+create policy "gc_miembros_update" on gc_miembros
+  for update using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());

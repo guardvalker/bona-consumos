@@ -17,16 +17,20 @@ credenciales ya cargadas en `config.js`.
 3. GitHub → Settings → Pages → Source: "Deploy from a branch" → `main` → `/ (root)`.
 4. Confirmar que carga en `https://guardvalker.github.io/bona-consumos/`.
 
-## Antes de usarlo con datos reales — correr el schema en Supabase
+## Estado del schema en Supabase
 
-El schema (`supabase/schema.sql`) todavía no está aplicado al proyecto vivo —
-fue diseñado y validado contra una copia local en Docker, no contra `bonapps`.
-Paso pendiente:
+El schema base (`supabase/schema.sql`, hasta el comentario "MIGRACIÓN
+2026-08-19") **ya está corrido** en el proyecto `bonapps` (confirmado
+2026-08-19, login real funcionando). Si alguna vez hay que levantar el
+proyecto desde cero en otro lugar, se pega el archivo completo tal cual en
+el SQL Editor.
 
-1. Dashboard de Supabase del proyecto `bonapps` → **Database → SQL Editor → New query**.
-2. Pegar el contenido completo de `supabase/schema.sql` y ejecutar.
-3. Verificar que las 6 tablas `gc_*` aparecen en **Table Editor** y que todas
-   tienen el candado de RLS activado (ícono junto al nombre de la tabla).
+**Pendiente en el proyecto vivo**: el bloque `MIGRACIÓN 2026-08-19` al final
+de `supabase/schema.sql` (columna `icono` en `gc_categorias` + política de
+UPDATE en `gc_miembros` para poder guardar el alias) todavía no se corrió
+contra `bonapps`. Copiar solo ese bloque (desde el comentario `-- MIGRACIÓN
+2026-08-19` hasta el final del archivo) en el SQL Editor y ejecutar — es
+idempotente, no rompe nada si se corre más de una vez.
 
 ## Verificar que Brevo esté conectado como SMTP (login por OTP)
 
