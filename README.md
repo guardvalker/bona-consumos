@@ -25,12 +25,16 @@ El schema base (`supabase/schema.sql`, hasta el comentario "MIGRACIÓN
 proyecto desde cero en otro lugar, se pega el archivo completo tal cual en
 el SQL Editor.
 
-**Pendiente en el proyecto vivo**: el bloque `MIGRACIÓN 2026-08-19` al final
-de `supabase/schema.sql` (columna `icono` en `gc_categorias` + política de
-UPDATE en `gc_miembros` para poder guardar el alias) todavía no se corrió
-contra `bonapps`. Copiar solo ese bloque (desde el comentario `-- MIGRACIÓN
-2026-08-19` hasta el final del archivo) en el SQL Editor y ejecutar — es
-idempotente, no rompe nada si se corre más de una vez.
+**Pendiente en el proyecto vivo**: la migración de `supabase/migracion-2026-08-19.sql`
+(columna `icono` en `gc_categorias` + política de UPDATE en `gc_miembros`
+para poder guardar el alias) todavía no se corrió contra `bonapps`. Copiar
+ese archivo completo (es chico, pensado para copiar entero sin buscar nada
+adentro) en el SQL Editor y ejecutar — es idempotente, no rompe nada si se
+corre más de una vez. **No pegar el `schema.sql` completo de nuevo**: la
+mayoría de las sentencias usan `if not exists` y no pasa nada, pero los
+`create policy` no tienen ese resguardo en Postgres — pegar todo el archivo
+de nuevo tira error en la primera política ya existente (bien arriba del
+archivo) y probablemente ni llegue a correr la parte nueva del final.
 
 ## Verificar que Brevo esté conectado como SMTP (login por OTP)
 

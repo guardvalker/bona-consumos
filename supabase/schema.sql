@@ -218,7 +218,9 @@ alter publication supabase_realtime add table
 -- `create policy` ya existentes (Postgres no tiene `create policy if not
 -- exists`). Este bloque sí es seguro de pegar y correr solo, tanto en el
 -- proyecto ya existente como en un setup nuevo desde cero (por eso también
--- queda acá aunque las tablas de arriba ya lo tengan incorporado).
+-- queda acá aunque las tablas de arriba ya lo tengan incorporado). También
+-- vive como archivo standalone en migracion-2026-08-19.sql, para copiar
+-- entero sin tener que ubicar este comentario dentro de un archivo grande.
 -- ----------------------------------------------------------------------------
 
 alter table gc_categorias add column if not exists icono text;
