@@ -1,6 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#1e1e2e"/>
-  <circle cx="206" cy="256" r="120" fill="none" stroke="#89b4fa" stroke-width="22"/>
-  <circle cx="306" cy="256" r="120" fill="none" stroke="#a6e3a1" stroke-width="22"/>
-  <text x="256" y="288" text-anchor="middle" font-family="'Courier New', monospace" font-size="150" font-weight="bold" fill="#cdd6f4">$</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fab387"/>
+      <stop offset="1" stop-color="#f9e2af"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#bg)"/>
+
+  <!-- sparkle accents -->
+  <path d="M112 96 L120 116 L140 124 L120 132 L112 152 L104 132 L84 124 L104 116 Z" fill="#f5c2e7"/>
+  <circle cx="404" cy="132" r="12" fill="#89dceb"/>
+
+  <!-- wallet body -->
+  <rect x="88" y="176" width="336" height="220" rx="36" fill="#eff1f5"/>
+  <rect x="88" y="176" width="336" height="66" rx="36" fill="#ffffff"/>
+  <rect x="88" y="176" width="336" height="220" rx="36" fill="none" stroke="#cba6f7" stroke-width="12"/>
+
+  <!-- coin clasp -->
+  <circle cx="366" cy="286" r="60" fill="#a6e3a1"/>
+  <text x="366" y="308" text-anchor="middle" font-family="'Courier New', monospace" font-size="64" font-weight="bold" fill="#1e1e2e">$</text>
 </svg>

@@ -18,6 +18,8 @@
       var t = localStorage.getItem('bona_consumos_theme');
       if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', t);
+      var p = localStorage.getItem('bona_consumos_palette');
+      document.documentElement.setAttribute('data-accent', p || 'blue');
     } catch (e) {}
   })();
 </script>
@@ -41,7 +43,7 @@
     --text: #cdd6f4;
     --text-dim: #a6adc8;
     --accent: var(--ctp-blue);
-    --accent-dim: rgba(137,180,250,0.18);
+    --accent-dim: color-mix(in srgb, var(--accent) 18%, var(--bg));
     --positive: var(--ctp-green);
     --negative: var(--ctp-red);
     --on-accent: #1e1e2e;
@@ -67,12 +69,24 @@
     --text: #4c4f69;
     --text-dim: #6c6f85;
     --accent: var(--ctp-blue);
-    --accent-dim: rgba(30,102,245,0.10);
+    --accent-dim: color-mix(in srgb, var(--accent) 10%, var(--bg));
     --positive: var(--ctp-green);
     --negative: var(--ctp-red);
     --on-accent: #ffffff;
     --shadow: 0 8px 24px rgba(76,79,105,0.12);
   }
+
+  /* Paleta de acento rotable (botón pincel en Ajustes) — recorre hues de
+     Catppuccin manteniendo rojo/verde reservados para saldos +/-. Va después
+     de los bloques de tema (misma especificidad que :root[data-theme]) para
+     que gane el empate y funcione tanto en claro como en oscuro. */
+  :root[data-accent="mauve"] { --accent: var(--ctp-mauve); }
+  :root[data-accent="pink"] { --accent: var(--ctp-pink); }
+  :root[data-accent="peach"] { --accent: var(--ctp-peach); }
+  :root[data-accent="teal"] { --accent: var(--ctp-teal); }
+  :root[data-accent="sky"] { --accent: var(--ctp-sky); }
+  :root[data-accent="lavender"] { --accent: var(--ctp-lavender); }
+  :root[data-accent="yellow"] { --accent: var(--ctp-yellow); }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -121,6 +135,7 @@
     border: none; border-radius: 14px; padding: 0.85rem 1.1rem;
     font-size: 0.98rem; font-weight: 600;
   }
+  .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
   .btn-primary { background: var(--accent); color: var(--on-accent); width: 100%; }
   .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); width: 100%; }
   .btn-danger { background: transparent; color: var(--negative); border: 1px solid var(--negative); width: 100%; }
@@ -128,6 +143,7 @@
 
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    border-left: 3px solid var(--accent);
     padding: 1rem; margin-bottom: 0.75rem;
   }
 
@@ -187,6 +203,7 @@
   .section-title {
     font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--text-dim); margin: 1.4rem 0 0.5rem;
+    border-left: 3px solid var(--accent); padding-left: 0.5rem;
   }
 
   .gasto-row {
@@ -246,6 +263,7 @@
   .overlay-sheet {
     position: fixed; left: 0; right: 0; bottom: 0; max-height: 90vh;
     background: var(--bg); border-radius: 20px 20px 0 0;
+    border-top: 3px solid var(--accent);
     padding: 1rem 1.1rem calc(1.5rem + env(safe-area-inset-bottom));
     overflow-y: auto; z-index: 11;
     transform: translateY(100%); transition: transform 0.2s ease;
@@ -254,7 +272,8 @@
   .overlay-sheet-inner { max-width: 480px; margin: 0 auto; }
   .sheet-header {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 1rem; padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--accent-dim);
   }
   .sheet-header h2 { font-size: 1.1rem; margin: 0; }
 
@@ -370,8 +389,14 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.7.1';
+  const APP_VERSION = '1.8.0';
   const CHANGELOG = [
+    { version: '1.8.0', fecha: '2026-08-19', notas: [
+      'Ícono de la app rediseñado: más amigable y colorido (antes era oscuro y serio).',
+      'Más color en bordes de tarjetas, títulos de sección y menús, para distinguir secciones de un vistazo.',
+      'Nuevo botón de pincel en Ajustes (al lado del sol/luna) para rotar la paleta de color de acento entre 8 tonos de Catppuccin.',
+      'Íconos en los botones de Estadísticas, Exportar CSV e Importar CSV para reconocerlos sin leer el texto.',
+    ] },
     { version: '1.7.1', fecha: '2026-08-19', notas: [
       'Fix: ícono de Gatitas rehecho — las orejas quedaban sueltas y no se entendía que era un gato.',
     ] },
@@ -723,6 +748,22 @@
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
   }
 
+  function paletteIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a9 9 0 0 1 0-18c4.5 0 8.5 3 8.5 6.5 0 2-1.5 3.5-3.5 3.5h-1.7a1.8 1.8 0 0 0-1.1 3.2c.5.4.8 1 .8 1.7 0 1.7-1.4 3.1-3 3.1Z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="11" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.1" fill="currentColor" stroke="none"/></svg>`;
+  }
+
+  function downloadIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>`;
+  }
+
+  function uploadIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 19h16"/></svg>`;
+  }
+
+  function chartIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>`;
+  }
+
   function formatFecha(iso) {
     if (!iso) return '';
     const [y, m, d] = iso.split('-');
@@ -1033,6 +1074,7 @@
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     return `
       <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:1.25rem">
+        <button class="icon-btn" id="btnTogglePalette" title="Cambiar paleta de color">${paletteIconSvg()}</button>
         <button class="icon-btn" id="btnToggleTheme" title="Cambiar tema">${themeToggleIconSvg(theme)}</button>
         <button class="icon-btn" id="btnCerrarOverlay">✕</button>
       </div>
@@ -1053,9 +1095,9 @@
 
       <label>Grupo activo${grupoActivo ? `: ${escapeHtml(grupoActivo.nombre)}` : ''}</label>
       <div class="btn-block-row">
-        <button class="btn btn-secondary" id="btnVerEstadisticas">Estadísticas</button>
-        <button class="btn btn-secondary" id="btnExportarCsv">Exportar CSV</button>
-        <button class="btn btn-secondary" id="btnImportarCsv">Importar CSV</button>
+        <button class="btn btn-secondary" id="btnVerEstadisticas">${chartIconSvg()} Estadísticas</button>
+        <button class="btn btn-secondary" id="btnExportarCsv">${downloadIconSvg()} Exportar CSV</button>
+        <button class="btn btn-secondary" id="btnImportarCsv">${uploadIconSvg()} Importar CSV</button>
       </div>
 
       <div class="btn-block-row" style="margin-top:2rem">
@@ -1419,6 +1461,15 @@
       const siguiente = actual === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', siguiente);
       try { localStorage.setItem('bona_consumos_theme', siguiente); } catch (e) {}
+      render();
+    });
+
+    on('#btnTogglePalette', 'click', () => {
+      const paleta = ['blue', 'mauve', 'pink', 'peach', 'teal', 'sky', 'lavender', 'yellow'];
+      const actual = document.documentElement.getAttribute('data-accent') || 'blue';
+      const siguiente = paleta[(paleta.indexOf(actual) + 1) % paleta.length];
+      document.documentElement.setAttribute('data-accent', siguiente);
+      try { localStorage.setItem('bona_consumos_palette', siguiente); } catch (e) {}
       render();
     });
     on('#btnCerrarOverlay', 'click', () => closeOverlay());
