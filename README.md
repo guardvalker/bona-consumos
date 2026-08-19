@@ -104,3 +104,23 @@ membresía en el mismo statement que la crea. `sync.js` ya respeta esto.
   diferencia de lista-super, acá la corrección de los datos (plata) importa
   más que funcionar offline. Recordar bumpear `CACHE_NAME` en cada deploy que
   toque archivos cacheados.
+- **Estadísticas**: gráficos (torta/barras) armados a mano en SVG
+  (`charts.js`), sin librería de gráficos — se recalculan en el momento a
+  partir de `gastos` del grupo activo, no hay nada persistido de esto.
+- **CSV export/import**: el matching de "quién pagó"/participantes es por
+  nombre para mostrar (alias o email), no por id — así un CSV exportado de
+  un grupo/cuenta puede reimportarse en otro grupo siempre que los mismos
+  nombres ya sean miembros ahí. Filas cuyo pagador o algún participante no
+  matchee un miembro actual se saltean (se listan en la consola, no se
+  adivina ni se crea gente nueva). La categoría de una fila importada NO
+  crea una entrada en `gc_categorias` — si no es una categoría conocida,
+  el gasto se guarda igual pero muestra el ícono genérico hasta que alguien
+  cree esa categoría manualmente.
+- **Backup local automático**: cada 10 gastos guardados (creados o editados)
+  desde este dispositivo, se guarda una foto del grupo activo en
+  `localStorage` (`bona_consumos_backup_0/1/2`, rotando — nunca se acumulan
+  más de 3). Completamente silencioso, sin cartel. **No tiene UI de
+  restauración todavía** — es solo la red de seguridad "por las dudas" que
+  se pidió, no un backup navegable/restaurable desde la app. Si hace falta
+  recuperar algo, por ahora es leer esas claves manualmente desde la consola
+  del navegador (`localStorage.getItem('bona_consumos_backup_0')`).

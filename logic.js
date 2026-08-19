@@ -3,7 +3,7 @@
 // sync.js consumen esto vía window.Logic.
 window.Logic = (function () {
 
-  const CATEGORIAS_DEFAULT = ['Salidas', 'Super', 'Servicios', 'Transporte'];
+  const CATEGORIAS_DEFAULT = ['Salidas', 'Super', 'Servicios', 'Transporte', 'Gatitas'];
 
   function round2(n) {
     return Math.round((n + Number.EPSILON) * 100) / 100;

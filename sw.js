@@ -1,5 +1,5 @@
-const CACHE = "bonapp-gastos-v8";
-const ASSETS = ["./", "./index.html", "./manifest.json", "./config.js", "./sync.js"];
+const CACHE = "bonapp-gastos-v9";
+const ASSETS = ["./", "./index.html", "./manifest.json", "./config.js", "./logic.js", "./charts.js", "./sync.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

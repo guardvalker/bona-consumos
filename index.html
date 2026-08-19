@@ -219,6 +219,17 @@
   .category-tile svg { width: 24px; height: 24px; color: var(--cat-color, currentColor); }
   .category-tile span { font-size: 0.78rem; font-weight: 600; text-align: center; line-height: 1.2; }
 
+  .icon-picker-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.45rem; margin-top: 0.4rem;
+  }
+  .icon-picker-tile {
+    aspect-ratio: 1; background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim);
+  }
+  .icon-picker-tile.active { background: var(--cat-tint, var(--accent-dim)); border-color: var(--cat-color, var(--accent)); color: var(--cat-color, var(--accent)); }
+  .icon-picker-tile svg { width: 18px; height: 18px; color: var(--cat-color, currentColor); }
+
   .fab {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem));
@@ -297,6 +308,16 @@
   .version-entry ul { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--text-dim); }
   .version-entry li { margin-bottom: 0.25rem; }
 
+  .stat-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.55rem 0; border-bottom: 1px dashed var(--border); font-size: 0.88rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { display: flex; align-items: center; gap: 0.45rem; }
+  .stat-icon { width: 16px; height: 16px; color: var(--cat-color, var(--text-dim)); flex-shrink: 0; }
+  .stat-value { font-weight: 600; white-space: nowrap; }
+  .stat-value small { font-weight: 400; color: var(--text-dim); }
+
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem));
@@ -311,10 +332,12 @@
 <div id="app"></div>
 <div class="overlay-backdrop" id="overlayBackdrop"></div>
 <div class="overlay-sheet" id="overlaySheet"><div class="overlay-sheet-inner" id="overlayBody"></div></div>
+<input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none">
 
 <script src="vendor/supabase.js"></script>
 <script src="config.js"></script>
 <script src="logic.js"></script>
+<script src="charts.js"></script>
 <script src="sync.js"></script>
 <script>
 (function () {
@@ -338,6 +361,7 @@
   let authBusy = false;
   let authError = '';
   let filtroCategoria = null;
+  let estadisticasTipo = 'torta'; // 'torta' | 'barras'
   let overlay = null;
   let pendingJoinCode = null;
 
@@ -346,8 +370,15 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.6.0';
+  const APP_VERSION = '1.7.0';
   const CHANGELOG = [
+    { version: '1.7.0', fecha: '2026-08-19', notas: [
+      'Nueva categoría default "Gatitas" (ícono de gatito) y Servicios ahora usa ícono de factura.',
+      'Picker de ícono de categorías custom: sin nombres, más chico, más variedad, y no repite íconos ya usados en el grupo.',
+      'Estadísticas por grupo (en Ajustes): gráfico de torta o barras de gastos por categoría.',
+      'Exportar/Importar gastos en CSV, para compartir entre cuentas.',
+      'Backup local automático cada 10 gastos subidos (silencioso, 3 copias rotativas).',
+    ] },
     { version: '1.6.0', fecha: '2026-08-19', notas: [
       'Más color de la paleta Catppuccin: cada categoría tiene su color fijo (atado al ícono, no al azar) en el ícono, el tile y el chip de filtro.',
       'El picker de íconos de categorías custom ahora muestra toda la paleta.',
@@ -384,33 +415,54 @@
     ] },
   ];
 
-  // Set fijo de íconos generados (sin emoji): las 4 categorías predefinidas
-  // usan claves puntuales, y el resto queda disponible como opciones para
-  // el picker al crear una categoría custom (ver ICON_PICKER_KEYS).
+  // Set fijo de íconos generados (sin emoji): las 5 categorías predefinidas
+  // usan claves puntuales (CATEGORY_ICON_KEY), y el resto queda disponible
+  // como opciones para el picker al crear una categoría custom — el picker
+  // no muestra nombres (ver renderNuevaCategoriaOverlay: el nombre lo define
+  // lo que la persona tipea, no el ícono) y filtra los íconos que ya están
+  // en uso por otra categoría del grupo.
   const ICON_LIBRARY = {
     fork: '<path d="M6 2v7a2 2 0 0 0 2 2v11M6 2v9M10 2v9M10 2v20M18 2c-2.2 0-4 3.6-4 8s1.8 8 4 8 4-3.6 4-8-1.8-8-4-8z"/>',
     cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
-    wrench: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3.4 3.4-2-2 3.4-3.4z"/>',
+    receipt: '<path d="M6 2h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2-2 1.2z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
     bus: '<path d="M3 13l1.5-6A2 2 0 0 1 6.4 5.5h11.2a2 2 0 0 1 1.9 1.5L21 13"/><rect x="2" y="13" width="20" height="6" rx="1.5"/><circle cx="6.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/>',
+    cat: '<path d="M8 3 5.5 8"/><path d="M16 3l2.5 5"/><path d="M5.5 8a6.5 6.5 0 0 0 13 0v4.5a6.5 6.5 0 0 1-13 0z"/><path d="M9.5 12.2v.01"/><path d="M14.5 12.2v.01"/><path d="M11 14.5h2l-1 1z"/>',
+    dog: '<path d="M4 8 2 5l3-1 2 3z"/><path d="M20 8l2-3-3-1-2 3z"/><path d="M4 8c0-2 2-3 8-3s8 1 8 3v5a7 7 0 0 1-14 0z"/><path d="M9 11.2v.01"/><path d="M15 11.2v.01"/><path d="M12 13.5v2"/>',
     home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
     gift: '<rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
     heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/>',
     plane: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>',
+    wrench: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3.4 3.4-2-2 3.4-3.4z"/>',
+    coffee: '<path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7 2c0 1-1 1-1 2s1 1 1 2M11 2c0 1-1 1-1 2s1 1 1 2"/>',
+    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+    music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+    gamepad: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M6 10v4M4 12h4"/><path d="M16 10.5v.01M19 13.5v.01"/>',
+    dumbbell: '<path d="M4 9v6M20 9v6"/><rect x="6" y="7" width="3" height="10" rx="1"/><rect x="15" y="7" width="3" height="10" rx="1"/><path d="M9 12h6"/>',
+    briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M2 13h20"/>',
+    baby: '<circle cx="12" cy="8" r="5"/><path d="M9.5 8v.01M14.5 8v.01"/><path d="M9.5 10.5c1 1 4 1 5 0"/><path d="M8 17c0 2 2 4 4 4s4-2 4-4"/>',
+    phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+    camera: '<path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>',
     dots: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   };
-  const ICON_LABELS = {
-    fork: 'Salidas', cart: 'Super', wrench: 'Servicios', bus: 'Transporte',
-    home: 'Hogar', gift: 'Regalos', heart: 'Salud', plane: 'Viajes', dots: 'Otro',
-  };
-  const ICON_PICKER_KEYS = ['home', 'gift', 'heart', 'plane', 'cart', 'fork', 'wrench', 'bus', 'dots'];
-  const CATEGORY_ICON_KEY = { Salidas: 'fork', Super: 'cart', Servicios: 'wrench', Transporte: 'bus' };
+  const ICON_PICKER_KEYS = [
+    'cat', 'dog', 'coffee', 'book', 'music', 'gamepad', 'dumbbell', 'briefcase', 'baby', 'phone', 'camera',
+    'home', 'gift', 'heart', 'plane', 'wrench', 'cart', 'fork', 'receipt', 'bus', 'dots',
+  ];
+  const CATEGORY_ICON_KEY = { Salidas: 'fork', Super: 'cart', Servicios: 'receipt', Transporte: 'bus', Gatitas: 'cat' };
 
   // Un color fijo de Catppuccin por ícono (no un hash) — así categorías
   // custom con el mismo ícono siempre coinciden en color, y el color viaja
-  // solo con el ícono elegido, no con la posición en ninguna lista.
+  // solo con el ícono elegido, no con la posición en ninguna lista. Las 5
+  // categorías predefinidas tienen cada una un color distinto entre sí; el
+  // resto de los íconos reciclan esos mismos 10 tonos de Catppuccin (no hay
+  // más matices que esos), la forma del ícono sigue siendo lo que las
+  // distingue.
   const ICON_KEY_COLOR = {
-    fork: '--ctp-peach', cart: '--ctp-green', wrench: '--ctp-yellow', bus: '--ctp-sky',
-    home: '--ctp-mauve', gift: '--ctp-pink', heart: '--ctp-red', plane: '--ctp-teal', dots: '--ctp-lavender',
+    fork: '--ctp-peach', cart: '--ctp-green', receipt: '--ctp-yellow', bus: '--ctp-sky', cat: '--ctp-mauve',
+    home: '--ctp-lavender', gift: '--ctp-pink', heart: '--ctp-red', plane: '--ctp-teal', wrench: '--ctp-blue',
+    dog: '--ctp-peach', coffee: '--ctp-yellow', book: '--ctp-mauve', music: '--ctp-pink', gamepad: '--ctp-teal',
+    dumbbell: '--ctp-red', briefcase: '--ctp-blue', baby: '--ctp-sky', phone: '--ctp-green', camera: '--ctp-lavender',
+    dots: '--ctp-lavender',
   };
 
   function iconKeyFor(categoriaNombre) {
@@ -418,6 +470,12 @@
     const custom = categoriasCustom.find((c) => c.nombre === categoriaNombre);
     if (custom && custom.icono && ICON_LIBRARY[custom.icono]) return custom.icono;
     return 'dots';
+  }
+
+  // Íconos ya usados por alguna categoría del grupo (predefinidas + custom)
+  // — el picker de "nueva categoría" los excluye para no repetir.
+  function iconKeysEnUso() {
+    return new Set(todasCategorias().map((c) => iconKeyFor(c)));
   }
 
   // Variables CSS (--cat-color sólido, --cat-tint de fondo suave mezclado
@@ -672,6 +730,181 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // ---- CSV: exportar / importar gastos (para compartir entre cuentas) ----
+
+  function displayNameForExport(usuarioId) {
+    const m = miembros.find((x) => x.usuarioId === usuarioId);
+    return (m && m.displayName) || usuarioId;
+  }
+
+  function csvField(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function gastosToCsv() {
+    const moneda = grupoActivo.monedaBase;
+    const headers = ['fecha', 'descripcion', 'categoria', 'monto', 'moneda', 'tasa_cambio', 'monto_base', 'moneda_base', 'pagado_por', 'tipo_split', 'participantes', 'notas'];
+    const filas = gastos.map((g) => {
+      const participantes = g.shares.map((s) => `${displayNameForExport(s.usuarioId)}:${s.montoBase}`).join(';');
+      return [
+        g.fecha, g.descripcion, g.categoria, g.monto, g.moneda,
+        g.tasaCambio != null ? g.tasaCambio : '', g.montoBase, moneda,
+        displayNameForExport(g.pagadoPor), g.shares[0] ? g.shares[0].tipoSplit : 'igual',
+        participantes, g.notas || '',
+      ];
+    });
+    return [headers, ...filas].map((f) => f.map(csvField).join(',')).join('\r\n');
+  }
+
+  function descargarCsv() {
+    if (!grupoActivo) return;
+    const csv = gastosToCsv();
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const nombreArchivo = `gastos-${grupoActivo.nombre.replace(/[^a-z0-9]+/gi, '-')}-${todayIso()}.csv`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // Parser CSV manual (soporta campos entre comillas con comas/comillas/
+  // saltos de línea escapados) — sin librerías, mismo criterio del resto.
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\r') {
+        // ignorar, \n cierra la fila
+      } else if (c === '\n') {
+        row.push(field); rows.push(row); row = []; field = '';
+      } else {
+        field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter((r) => r.length > 1 || (r.length === 1 && r[0] !== ''));
+  }
+
+  // Matchea pagado_por/participantes por nombre para mostrar (alias o
+  // email) contra los miembros del grupo ACTIVO — un CSV exportado de otra
+  // cuenta/grupo solo puede reimportarse si esos mismos nombres ya son
+  // miembros acá; lo que no matchea se reporta y se salta, no se adivina.
+  async function importarCsvTexto(text) {
+    if (!grupoActivo) throw new Error('No hay un grupo activo');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw new Error('El CSV no tiene filas para importar');
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    const colIdx = (name) => headers.indexOf(name);
+    const requeridas = ['fecha', 'descripcion', 'categoria', 'monto', 'moneda', 'pagado_por', 'participantes'];
+    const faltantes = requeridas.filter((r) => colIdx(r) === -1);
+    if (faltantes.length) throw new Error(`Faltan columnas en el CSV: ${faltantes.join(', ')}`);
+
+    const porNombre = new Map(miembros.map((m) => [(m.displayName || '').trim().toLowerCase(), m.usuarioId]));
+    const saltados = [];
+    let importados = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r.length || (r.length === 1 && !r[0])) continue;
+      const get = (name) => { const j = colIdx(name); return j === -1 ? '' : (r[j] || '').trim(); };
+      const filaNum = i + 1;
+
+      const pagadoPor = porNombre.get(get('pagado_por').toLowerCase());
+      if (!pagadoPor) { saltados.push(`Fila ${filaNum}: no encontré a "${get('pagado_por')}" entre los miembros`); continue; }
+
+      const partesTxt = get('participantes').split(';').map((p) => p.trim()).filter(Boolean);
+      const shares = [];
+      let nombreNoEncontrado = null;
+      for (const parte of partesTxt) {
+        const [nombreParte, montoParteStr] = parte.split(':');
+        const participanteId = porNombre.get((nombreParte || '').trim().toLowerCase());
+        if (!participanteId) { nombreNoEncontrado = nombreParte; break; }
+        shares.push({ usuarioId: participanteId, tipoSplit: get('tipo_split') || 'igual', valor: null, montoBase: L.round2(Number(montoParteStr) || 0) });
+      }
+      if (nombreNoEncontrado) { saltados.push(`Fila ${filaNum}: no encontré a "${nombreNoEncontrado}" entre los miembros`); continue; }
+      if (!shares.length) { saltados.push(`Fila ${filaNum}: sin participantes válidos`); continue; }
+
+      const monto = Number(get('monto'));
+      if (!monto || monto <= 0) { saltados.push(`Fila ${filaNum}: monto inválido`); continue; }
+      const montoBaseTxt = get('monto_base');
+      const tasaTxt = get('tasa_cambio');
+
+      const gasto = {
+        id: uid(),
+        descripcion: get('descripcion') || get('categoria') || 'Importado',
+        monto,
+        moneda: get('moneda') || grupoActivo.monedaBase,
+        tasaCambio: tasaTxt ? Number(tasaTxt) : null,
+        montoBase: L.round2(montoBaseTxt ? Number(montoBaseTxt) : monto),
+        categoria: get('categoria') || 'Otros',
+        pagadoPor,
+        fecha: /^\d{4}-\d{2}-\d{2}$/.test(get('fecha')) ? get('fecha') : todayIso(),
+        notas: get('notas') || '',
+        shares,
+      };
+      try {
+        await window.Sync.saveGasto(gasto);
+        importados++;
+      } catch (e) {
+        saltados.push(`Fila ${filaNum}: ${e.message || 'error al guardar'}`);
+      }
+    }
+    return { importados, saltados };
+  }
+
+  // ---- Backup local automático ----
+  // Cada 10 gastos guardados (creados o editados) desde este dispositivo,
+  // se guarda una foto del grupo activo en localStorage, rotando entre 3
+  // slots que se pisan entre sí (no se acumulan archivos) — totalmente en
+  // silencio, sin cartel ni interrupción. El contador es global al
+  // dispositivo, no por grupo.
+  const BACKUP_CONTADOR_KEY = 'bona_consumos_gastos_subidos';
+  const BACKUP_SLOT_KEY = 'bona_consumos_backup_slot';
+
+  function registrarGastoSubidoYBackupSiCorresponde() {
+    let n = 0;
+    try { n = parseInt(localStorage.getItem(BACKUP_CONTADOR_KEY) || '0', 10) || 0; } catch (e) {}
+    n += 1;
+    try { localStorage.setItem(BACKUP_CONTADOR_KEY, String(n)); } catch (e) {}
+    if (n % 10 === 0) hacerBackupLocal();
+  }
+
+  function hacerBackupLocal() {
+    if (!grupoActivo) return;
+    try {
+      const slot = (parseInt(localStorage.getItem(BACKUP_SLOT_KEY) || '0', 10) || 0) % 3;
+      const snapshot = {
+        fecha: new Date().toISOString(),
+        grupoId: grupoActivo.id,
+        grupoNombre: grupoActivo.nombre,
+        monedaBase: grupoActivo.monedaBase,
+        gastos, settlements, categoriasCustom, miembros,
+      };
+      localStorage.setItem(`bona_consumos_backup_${slot}`, JSON.stringify(snapshot));
+      localStorage.setItem(BACKUP_SLOT_KEY, String((slot + 1) % 3));
+    } catch (e) {
+      // A propósito silencioso — un backup local nunca debe interrumpir el
+      // flujo ni mostrar error; si localStorage está lleno o no disponible
+      // se pierde ese backup puntual sin romper nada más.
+      console.warn('[backup local] no se pudo guardar', e);
+    }
+  }
+
   // ---- Overlays ----
   function closeOverlay() {
     // El overlay de "nueva categoría" se abre desde arriba del formulario de
@@ -702,6 +935,7 @@
     else if (overlay.type === 'unirseGrupo') body.innerHTML = renderUnirseGrupoOverlay();
     else if (overlay.type === 'ajustes') body.innerHTML = renderAjustesOverlay();
     else if (overlay.type === 'versiones') body.innerHTML = renderVersionesOverlay();
+    else if (overlay.type === 'estadisticas') body.innerHTML = renderEstadisticasOverlay();
     else if (overlay.type === 'gasto') body.innerHTML = renderGastoOverlay(overlay);
     else if (overlay.type === 'settle') body.innerHTML = renderSettleOverlay(overlay);
     else if (overlay.type === 'nuevaCategoria') body.innerHTML = renderNuevaCategoriaOverlay(overlay);
@@ -814,6 +1048,13 @@
         <button class="btn btn-secondary" id="btnGuardarAlias">Guardar alias</button>
       </div>
 
+      <label>Grupo activo${grupoActivo ? `: ${escapeHtml(grupoActivo.nombre)}` : ''}</label>
+      <div class="btn-block-row">
+        <button class="btn btn-secondary" id="btnVerEstadisticas">Estadísticas</button>
+        <button class="btn btn-secondary" id="btnExportarCsv">Exportar CSV</button>
+        <button class="btn btn-secondary" id="btnImportarCsv">Importar CSV</button>
+      </div>
+
       <div class="btn-block-row" style="margin-top:2rem">
         <button class="btn btn-danger" id="btnLogout">Cerrar sesión</button>
       </div>`;
@@ -830,17 +1071,69 @@
       <div class="version-list">${entradas}</div>`;
   }
 
+  // ---- Overlay: estadísticas (dinámico por grupo activo) ----
+  function renderEstadisticasOverlay() {
+    if (!grupoActivo) {
+      return `
+        <div class="sheet-header"><h2>Estadísticas</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+        <div class="empty-state">No hay un grupo activo.</div>`;
+    }
+    const moneda = grupoActivo.monedaBase;
+    const totales = {};
+    gastos.forEach((g) => { totales[g.categoria] = (totales[g.categoria] || 0) + g.montoBase; });
+    const filas = Object.keys(totales)
+      .map((cat) => ({ categoria: cat, valor: totales[cat], colorVar: ICON_KEY_COLOR[iconKeyFor(cat)] || '--ctp-lavender' }))
+      .sort((a, b) => b.valor - a.valor);
+
+    if (!filas.length) {
+      return `
+        <div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+        <div class="empty-state">Todavía no hay gastos en este grupo.</div>`;
+    }
+
+    const totalGeneral = filas.reduce((a, f) => a + f.valor, 0);
+    const chartData = filas.map((f) => ({ value: f.valor, colorVar: f.colorVar }));
+    const chartHtml = estadisticasTipo === 'torta'
+      ? `<div style="display:flex; justify-content:center; margin:0.5rem 0">${window.Charts.pieChart(chartData)}</div>`
+      : `<div style="margin:0.5rem 0">${window.Charts.barChart(chartData, { rowHeight: 34 })}</div>`;
+
+    const leyenda = filas.map((f) => {
+      const pct = totalGeneral > 0 ? Math.round((f.valor / totalGeneral) * 100) : 0;
+      return `
+        <div class="stat-row" style="--cat-color:var(${f.colorVar})">
+          <span class="stat-label">${icon(f.categoria, 'stat-icon')} ${escapeHtml(f.categoria)}</span>
+          <span class="stat-value">${fmt(f.valor, moneda)} <small>(${pct}%)</small></span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="chips">
+        <button class="chip ${estadisticasTipo === 'torta' ? 'active' : ''}" data-set-estadisticas-tipo="torta">Torta</button>
+        <button class="chip ${estadisticasTipo === 'barras' ? 'active' : ''}" data-set-estadisticas-tipo="barras">Barras</button>
+      </div>
+      ${chartHtml}
+      <div class="section-title" style="margin-top:0.5rem">Total: ${fmt(totalGeneral, moneda)}</div>
+      <div>${leyenda}</div>`;
+  }
+
   function renderNuevaCategoriaOverlay(ov) {
     const draft = ov.draft;
-    const tiles = ICON_PICKER_KEYS.map((k) =>
-      `<button class="category-tile ${draft.icono === k ? 'active' : ''}" data-set-nueva-cat-icono="${k}" style="${iconKeyColorStyle(k)}">${svgForKey(k)}<span>${ICON_LABELS[k]}</span></button>`
+    const enUso = iconKeysEnUso();
+    // El ícono elegido en un uso anterior de este mismo draft puede haber
+    // quedado "en uso" mientras tanto (ej. otra pestaña) — igual se sigue
+    // mostrando si es el que ya está seleccionado, para no perder la
+    // selección de golpe; el resto de los repetidos se ocultan.
+    const disponibles = ICON_PICKER_KEYS.filter((k) => k === draft.icono || !enUso.has(k));
+    const tiles = disponibles.map((k) =>
+      `<button class="icon-picker-tile ${draft.icono === k ? 'active' : ''}" data-set-nueva-cat-icono="${k}" style="${iconKeyColorStyle(k)}" title="">${svgForKey(k)}</button>`
     ).join('');
     return `
       <div class="sheet-header"><h2>Nueva categoría</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
       <label>Nombre</label>
       <input type="text" id="nuevaCatInput" value="${escapeHtml(draft.nombre)}" placeholder="Ej: Mascotas">
       <label>Ícono</label>
-      <div class="category-grid">${tiles}</div>
+      <div class="icon-picker-grid">${tiles}</div>
       <div class="btn-block-row">
         <button class="btn btn-primary" id="btnConfirmarNuevaCategoria">Agregar</button>
       </div>`;
@@ -1092,6 +1385,12 @@
     on('#btnAjustes', 'click', () => openOverlay({ type: 'ajustes' }));
     on('#btnVerVersiones', 'click', () => openOverlay({ type: 'versiones' }));
 
+    on('#btnVerEstadisticas', 'click', () => openOverlay({ type: 'estadisticas' }));
+    on('[data-set-estadisticas-tipo]', 'click', (el) => {
+      estadisticasTipo = el.getAttribute('data-set-estadisticas-tipo');
+      render();
+    });
+
     on('#btnActualizar', 'click', async (el) => {
       el.disabled = true;
       // Fuerza la actualización aunque el navegador todavía no haya
@@ -1128,6 +1427,16 @@
         toast('Alias actualizado');
         render();
       } catch (e) { toast(e.message || 'No se pudo actualizar el alias'); }
+    });
+
+    on('#btnExportarCsv', 'click', () => {
+      if (!grupoActivo) return toast('No hay un grupo activo');
+      if (!gastos.length) return toast('Este grupo todavía no tiene gastos');
+      descargarCsv();
+    });
+    on('#btnImportarCsv', 'click', () => {
+      if (!grupoActivo) return toast('No hay un grupo activo');
+      document.getElementById('csvFileInput').click();
     });
 
     on('#btnCopiarLink', 'click', async () => {
@@ -1168,7 +1477,9 @@
 
     on('#btnNuevaCategoria', 'click', (el, ev) => {
       ev.preventDefault();
-      openOverlay({ type: 'nuevaCategoria', prevOverlay: overlay, draft: { nombre: '', icono: 'dots' } });
+      const enUso = iconKeysEnUso();
+      const primerDisponible = ICON_PICKER_KEYS.find((k) => !enUso.has(k)) || 'dots';
+      openOverlay({ type: 'nuevaCategoria', prevOverlay: overlay, draft: { nombre: '', icono: primerDisponible } });
     });
     on('#nuevaCatInput', 'input', (el) => {
       if (!overlay || overlay.type !== 'nuevaCategoria') return;
@@ -1305,6 +1616,7 @@
 
       try {
         await window.Sync.saveGasto(gasto);
+        registrarGastoSubidoYBackupSiCorresponde();
         closeOverlay();
       } catch (e) { d.error = e.message || 'No se pudo guardar'; render(); }
     });
@@ -1435,6 +1747,23 @@
   // igual que la ✕ (mismo closeOverlay(), respeta el caso especial de
   // "nueva categoría" volviendo al gasto en progreso).
   document.getElementById('overlayBackdrop').addEventListener('click', closeOverlay);
+
+  // El input de archivo también es estático (fuera de #app/#overlayBody) —
+  // se dispara con .click() desde el botón "Importar CSV" del Ajustes
+  // (ese sí vive dentro de wireEvents(), se re-crea en cada render).
+  document.getElementById('csvFileInput').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = ''; // permite volver a elegir el mismo archivo después
+    if (!file) return;
+    try {
+      const texto = await file.text();
+      const { importados, saltados } = await importarCsvTexto(texto);
+      if (saltados.length) console.warn('[CSV import] filas omitidas:', saltados);
+      toast(`Importados ${importados} gasto(s)${saltados.length ? ` · ${saltados.length} omitido(s), ver consola` : ''}`);
+    } catch (e) {
+      toast(e.message || 'No se pudo importar el CSV');
+    }
+  });
 
   if (!window.Sync.isConfigured()) {
     document.getElementById('app').innerHTML = `<div class="empty-state">Falta configurar Supabase en config.js</div>`;
