@@ -89,6 +89,13 @@
     margin: 0 auto;
     min-height: 100vh;
     padding: 1rem 1rem 6rem;
+    /* En iOS instalada como PWA (status bar "black-translucent" +
+       viewport-fit=cover), el contenido arranca debajo del notch/batería si
+       no se le suma el safe-area-inset-top acá — el max() mantiene el
+       padding de 1rem normal en Android/desktop, donde ese inset es 0. */
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 
   .top-bar {
@@ -213,7 +220,8 @@
   .category-tile span { font-size: 0.78rem; font-weight: 600; text-align: center; line-height: 1.2; }
 
   .fab {
-    position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%);
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem));
     width: min(420px, calc(100% - 2rem));
     z-index: 5;
   }
@@ -290,7 +298,8 @@
   .version-entry li { margin-bottom: 0.25rem; }
 
   .toast {
-    position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem));
     background: var(--card-2); border: 1px solid var(--border); color: var(--text);
     padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.85rem; z-index: 20;
     box-shadow: var(--shadow);
@@ -337,8 +346,12 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.5.1';
   const CHANGELOG = [
+    { version: '1.5.1', fecha: '2026-08-19', notas: [
+      'Fix iOS: la barra superior ya no queda tapada por el notch/batería (safe-area-inset).',
+      'El botón de cargar gasto y los avisos también respetan el safe-area de abajo (home indicator).',
+    ] },
     { version: '1.5.0', fecha: '2026-08-19', notas: [
       'Alias de miembro (en Ajustes) — reemplaza el email en todos los grupos.',
       'Gastos con color según quién los pagó, para distinguirlos de un vistazo.',
