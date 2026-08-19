@@ -1,4 +1,4 @@
-const CACHE = "bona-consumos-v2";
+const CACHE = "bona-consumos-v3";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./config.js", "./sync.js"];
 
 self.addEventListener("install", (event) => {
