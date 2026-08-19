@@ -1,6 +1,6 @@
 {
-  "name": "BONA Consumos",
-  "short_name": "Consumos",
+  "name": "bonapp-gastos",
+  "short_name": "bonapp-gastos",
   "description": "Gastos compartidos entre grupos chicos — quién pagó, quién debe",
   "start_url": "./index.html",
   "scope": "./",

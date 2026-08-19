@@ -1,4 +1,6 @@
-# BONA Consumos — gastos compartidos
+# bonapp-gastos
+
+Repo `bona-consumos`, app "bonapp-gastos" — gastos compartidos
 
 App de gastos compartidos para grupos chicos y fijos (estilo Tricount, más simple).
 Un solo `index.html` (HTML/CSS/JS vanilla, sin build), Supabase como backend,
