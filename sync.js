@@ -272,7 +272,7 @@ window.Sync = (function () {
 
   async function fetchGrupoState() {
     const [gastosRes, settlementsRes, categoriasRes, miembrosRes] = await Promise.all([
-      sb.from('gc_gastos').select('*').eq('grupo_id', grupoId).order('fecha', { ascending: false }),
+      sb.from('gc_gastos').select('*').eq('grupo_id', grupoId).order('creado_en', { ascending: false }),
       sb.from('gc_settlements').select('*').eq('grupo_id', grupoId),
       sb.from('gc_categorias').select('*').eq('grupo_id', grupoId),
       sb.from('gc_miembros').select('*').eq('grupo_id', grupoId),
@@ -300,6 +300,7 @@ window.Sync = (function () {
       fecha: g.fecha,
       notas: g.notas,
       creadoPor: g.creado_por,
+      creadoEn: g.creado_en,
       shares: sharesRes.data
         .filter((s) => s.gasto_id === g.id)
         .map((s) => ({

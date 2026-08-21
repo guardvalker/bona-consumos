@@ -390,8 +390,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.9.0';
+  const APP_VERSION = '1.9.1';
   const CHANGELOG = [
+    { version: '1.9.1', fecha: '2026-08-21', notas: [
+      'Fix: los gastos de un mismo día quedaban en un orden inestable en la lista. Ahora se ordenan por cuándo se subieron de verdad (más nuevo primero), no solo por la fecha elegida.',
+    ] },
     { version: '1.9.0', fecha: '2026-08-21', notas: [
       'Al cargar un gasto, "Entre quiénes" ahora muestra cuánto le toca pagar a cada uno al lado del nombre (en partes iguales o en porcentajes/shares), no solo al guardar.',
     ] },
