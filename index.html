@@ -389,8 +389,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.8.0';
+  const APP_VERSION = '1.8.1';
   const CHANGELOG = [
+    { version: '1.8.1', fecha: '2026-08-21', notas: [
+      'Fix: un gasto tuyo en la lista ya no dice "Vos pagó" — ahora muestra tu alias, igual que se ve para el resto de los miembros.',
+    ] },
     { version: '1.8.0', fecha: '2026-08-19', notas: [
       'Ícono de la app rediseñado: más amigable y colorido (antes era oscuro y serio).',
       'Más color en bordes de tarjetas, títulos de sección y menús, para distinguir secciones de un vistazo.',
@@ -559,6 +562,13 @@
     return (m && m.displayName) || 'Miembro';
   }
 
+  // Igual que displayName pero sin el caso especial "Vos" — para listados
+  // donde el pagador siempre debe verse con su alias, seas vos o no.
+  function payerName(usuarioId) {
+    const m = miembros.find((x) => x.usuarioId === usuarioId);
+    return (m && m.displayName) || 'Miembro';
+  }
+
   function toast(msg) {
     const el = document.createElement('div');
     el.className = 'toast';
@@ -707,7 +717,7 @@
               <div class="cat-icon" style="${catColorStyle(g.categoria)}">${icon(g.categoria)}</div>
               <div class="mid">
                 <div class="desc">${escapeHtml(g.descripcion)}</div>
-                <div class="meta"><span class="payer-dot"></span>${escapeHtml(displayName(g.pagadoPor))} pagó · ${formatFecha(g.fecha)}</div>
+                <div class="meta"><span class="payer-dot"></span>${escapeHtml(payerName(g.pagadoPor))} pagó · ${formatFecha(g.fecha)}</div>
               </div>
               <div class="monto">${fmt(g.montoBase, moneda)}${distinta ? `<small>${fmt(g.monto, g.moneda)}</small>` : ''}</div>
             </div>`;
