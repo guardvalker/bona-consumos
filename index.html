@@ -283,6 +283,7 @@
   }
   .participant-row:last-child { border-bottom: none; }
   .participant-row .pname { flex: 1; font-size: 0.9rem; }
+  .participant-row .pmonto { font-size: 0.85rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .participant-row input[type="checkbox"] { width: 18px; height: 18px; }
   .participant-row input[type="text"] { width: 90px; margin: 0; text-align: right; }
 
@@ -389,8 +390,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.8.1';
+  const APP_VERSION = '1.9.0';
   const CHANGELOG = [
+    { version: '1.9.0', fecha: '2026-08-21', notas: [
+      'Al cargar un gasto, "Entre quiénes" ahora muestra cuánto le toca pagar a cada uno al lado del nombre (en partes iguales o en porcentajes/shares), no solo al guardar.',
+    ] },
     { version: '1.8.1', fecha: '2026-08-21', notas: [
       'Fix: un gasto tuyo en la lista ya no dice "Vos pagó" — ahora muestra tu alias, igual que se ve para el resto de los miembros.',
     ] },
@@ -1229,6 +1233,24 @@
     }
 
     const totalNumber = Number(draft.monto) || 0;
+
+    // Preview en vivo de cuánto le toca a cada uno, sin usar calcularShares
+    // (esa valida que las partes sumen el total y tira error si todavía no
+    // están completas — acá solo queremos mostrar mientras se carga, no
+    // validar). 'monto_fijo' no necesita preview: el input ya ES el monto.
+    let montoPorParticipante = {};
+    if (draft.modo === 'igual' && draft.participantes.length > 0 && totalNumber > 0) {
+      const partes = L.splitEqual(totalNumber, draft.participantes.length);
+      draft.participantes.forEach((id, i) => { montoPorParticipante[id] = partes[i]; });
+    } else if ((draft.modo === 'porcentaje' || draft.modo === 'shares') && draft.participantes.length > 0 && totalNumber > 0) {
+      const pesos = draft.participantes.map((id) => Number(draft.valores[id]) || 0);
+      const sumaPesos = pesos.reduce((a, b) => a + b, 0);
+      if (sumaPesos > 0) {
+        const partes = L.splitByWeights(totalNumber, pesos);
+        draft.participantes.forEach((id, i) => { montoPorParticipante[id] = partes[i]; });
+      }
+    }
+
     const participantesRows = miembros.map((m) => {
       const incluido = draft.participantes.includes(m.usuarioId);
       const valor = draft.valores[m.usuarioId] != null ? draft.valores[m.usuarioId] : '';
@@ -1237,10 +1259,14 @@
         const placeholder = draft.modo === 'porcentaje' ? '%' : draft.modo === 'shares' ? 'partes' : moneda;
         inputHtml = `<input type="text" inputmode="decimal" data-valor-participante="${m.usuarioId}" value="${valor}" placeholder="${placeholder}">`;
       }
+      const montoHtml = incluido && montoPorParticipante[m.usuarioId] != null
+        ? `<span class="pmonto">${fmt(montoPorParticipante[m.usuarioId], moneda)}</span>`
+        : '';
       return `
         <div class="participant-row">
           <input type="checkbox" data-toggle-participante="${m.usuarioId}" ${incluido ? 'checked' : ''}>
           <span class="pname">${escapeHtml(displayName(m.usuarioId))}</span>
+          ${montoHtml}
           ${inputHtml}
         </div>`;
     }).join('');
