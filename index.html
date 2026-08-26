@@ -390,8 +390,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.9.1';
+  const APP_VERSION = '1.9.2';
   const CHANGELOG = [
+    { version: '1.9.2', fecha: '2026-08-25', notas: [
+      'Fix: a veces al abrir la app aparecía un error de sesión/JWT abajo de todo. Ahora si el token guardado está por vencer justo al arrancar, se refresca solo y reintenta antes de mostrar cualquier error.',
+    ] },
     { version: '1.9.1', fecha: '2026-08-21', notas: [
       'Fix: los gastos de un mismo día quedaban en un orden inestable en la lista. Ahora se ordenan por cuándo se subieron de verdad (más nuevo primero), no solo por la fecha elegida.',
     ] },

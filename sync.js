@@ -26,6 +26,26 @@ window.Sync = (function () {
     cb.onSyncError && cb.onSyncError(err && err.message ? err.message : String(err));
   }
 
+  // Al reabrir la app (sobre todo una PWA que estuvo un rato cerrada), el
+  // access_token guardado puede estar vencido justo cuando se dispara la
+  // primera consulta — Supabase todavía no llegó a refrescarlo solo. En vez
+  // de mostrarle al usuario el error crudo de Postgres/Supabase, refrescamos
+  // la sesión una vez y reintentamos antes de rendirnos.
+  function isJwtError(e) {
+    const msg = String((e && e.message) || e || '').toLowerCase();
+    return msg.includes('jwt') || (e && e.status === 401) || (e && e.code === 'PGRST301');
+  }
+
+  async function withJwtRetry(fn) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isJwtError(e)) throw e;
+      try { await sb.auth.refreshSession(); } catch (_) {}
+      return await fn();
+    }
+  }
+
   function getStoredGrupoId() {
     try { return localStorage.getItem(GRUPO_ID_KEY); } catch (e) { return null; }
   }
@@ -116,40 +136,42 @@ window.Sync = (function () {
     if (!sb || !currentUser) return [];
     const uid = currentUser.id;
 
-    const [miembrosRes, grupos, pagados, shares, settlementsDe, settlementsA] = await Promise.all([
-      sb.from('gc_miembros').select('grupo_id').eq('usuario_id', uid),
-      sb.from('gc_grupos').select('id, nombre, moneda_base, creado_por'),
-      sb.from('gc_gastos').select('grupo_id, monto_base').eq('pagado_por', uid),
-      sb.from('gc_gasto_shares').select('monto_base, gasto:gc_gastos(grupo_id)').eq('usuario_id', uid),
-      sb.from('gc_settlements').select('grupo_id, monto').eq('de_usuario_id', uid),
-      sb.from('gc_settlements').select('grupo_id, monto').eq('a_usuario_id', uid),
-    ]);
-    if (miembrosRes.error) throw miembrosRes.error;
-    if (grupos.error) throw grupos.error;
-    if (pagados.error) throw pagados.error;
-    if (shares.error) throw shares.error;
-    if (settlementsDe.error) throw settlementsDe.error;
-    if (settlementsA.error) throw settlementsA.error;
+    return withJwtRetry(async () => {
+      const [miembrosRes, grupos, pagados, shares, settlementsDe, settlementsA] = await Promise.all([
+        sb.from('gc_miembros').select('grupo_id').eq('usuario_id', uid),
+        sb.from('gc_grupos').select('id, nombre, moneda_base, creado_por'),
+        sb.from('gc_gastos').select('grupo_id, monto_base').eq('pagado_por', uid),
+        sb.from('gc_gasto_shares').select('monto_base, gasto:gc_gastos(grupo_id)').eq('usuario_id', uid),
+        sb.from('gc_settlements').select('grupo_id, monto').eq('de_usuario_id', uid),
+        sb.from('gc_settlements').select('grupo_id, monto').eq('a_usuario_id', uid),
+      ]);
+      if (miembrosRes.error) throw miembrosRes.error;
+      if (grupos.error) throw grupos.error;
+      if (pagados.error) throw pagados.error;
+      if (shares.error) throw shares.error;
+      if (settlementsDe.error) throw settlementsDe.error;
+      if (settlementsA.error) throw settlementsA.error;
 
-    const misGrupoIds = new Set(miembrosRes.data.map((m) => m.grupo_id));
-    const balancePorGrupo = {};
-    const add = (grupoId, delta) => {
-      balancePorGrupo[grupoId] = window.Logic.round2((balancePorGrupo[grupoId] || 0) + delta);
-    };
-    pagados.data.forEach((g) => add(g.grupo_id, Number(g.monto_base)));
-    shares.data.forEach((s) => { if (s.gasto) add(s.gasto.grupo_id, -Number(s.monto_base)); });
-    settlementsDe.data.forEach((s) => add(s.grupo_id, Number(s.monto)));
-    settlementsA.data.forEach((s) => add(s.grupo_id, -Number(s.monto)));
+      const misGrupoIds = new Set(miembrosRes.data.map((m) => m.grupo_id));
+      const balancePorGrupo = {};
+      const add = (grupoId, delta) => {
+        balancePorGrupo[grupoId] = window.Logic.round2((balancePorGrupo[grupoId] || 0) + delta);
+      };
+      pagados.data.forEach((g) => add(g.grupo_id, Number(g.monto_base)));
+      shares.data.forEach((s) => { if (s.gasto) add(s.gasto.grupo_id, -Number(s.monto_base)); });
+      settlementsDe.data.forEach((s) => add(s.grupo_id, Number(s.monto)));
+      settlementsA.data.forEach((s) => add(s.grupo_id, -Number(s.monto)));
 
-    return grupos.data
-      .filter((g) => misGrupoIds.has(g.id))
-      .map((g) => ({
-        id: g.id,
-        nombre: g.nombre,
-        monedaBase: g.moneda_base,
-        creadoPor: g.creado_por,
-        balance: balancePorGrupo[g.id] || 0,
-      }));
+      return grupos.data
+        .filter((g) => misGrupoIds.has(g.id))
+        .map((g) => ({
+          id: g.id,
+          nombre: g.nombre,
+          monedaBase: g.moneda_base,
+          creadoPor: g.creado_por,
+          balance: balancePorGrupo[g.id] || 0,
+        }));
+    });
   }
 
   // ---- Grupo activo ----
@@ -261,11 +283,13 @@ window.Sync = (function () {
   async function selectGrupo(id) {
     grupoId = id;
     setStoredGrupoId(id);
-    await refreshGrupoInfo();
-    if (!grupoId) return; // refreshGrupoInfo desvinculó: no somos miembro real
-    subscribeRealtime();
-    cb.onGrupoChange && cb.onGrupoChange(grupoInfo);
-    await pullNow();
+    return withJwtRetry(async () => {
+      await refreshGrupoInfo();
+      if (!grupoId) return; // refreshGrupoInfo desvinculó: no somos miembro real
+      subscribeRealtime();
+      cb.onGrupoChange && cb.onGrupoChange(grupoInfo);
+      await pullNow();
+    });
   }
 
   // ---- Pull remoto (detalle completo del grupo activo) ----
@@ -469,8 +493,11 @@ window.Sync = (function () {
       }
     };
 
+    // onAuthStateChange ya dispara un evento INITIAL_SESSION con la sesión
+    // guardada apenas nos suscribimos (supabase-js v2) — llamar además a
+    // getSession() acá duplicaba el handleSession inicial y podía disparar
+    // selectGrupo()/carga de grupos dos veces en paralelo al abrir la app.
     sb.auth.onAuthStateChange((_event, session) => handleSession(session));
-    sb.auth.getSession().then(({ data }) => handleSession(data.session));
   }
 
   return {
