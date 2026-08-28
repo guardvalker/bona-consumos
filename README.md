@@ -1,8 +1,12 @@
 # bonapp-gastos
 
-Repo `bona-consumos`, app "bonapp-gastos" — gastos compartidos
+**App:** https://guardvalker.github.io/bona-consumos/
 
-App de gastos compartidos para grupos chicos y fijos (estilo Tricount, más simple).
+App de gastos compartidos para grupos chicos y fijos (estilo Tricount, más
+simple): cargar gastos, dividirlos entre miembros (partes iguales, por
+porcentaje o montos manuales), ver balances por grupo y estadísticas por
+categoría. Repo `bona-consumos`, nombre visible "bonapp-gastos".
+
 Un solo `index.html` (HTML/CSS/JS vanilla, sin build), Supabase como backend,
 PWA instalable. Ver spec original en `~/Downloads/gastos-compartidos-spec.md`.
 
