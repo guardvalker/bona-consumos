@@ -404,8 +404,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.10.0';
+  const APP_VERSION = '1.10.1';
   const CHANGELOG = [
+    { version: '1.10.1', fecha: '2026-09-12', notas: [
+      'Fix: la fecha en el historial de versiones se mostraba como año-mes-día (ej. 2026-09-12). Ahora usa el mismo formato día/mes/año que el resto de la app.',
+    ] },
     { version: '1.10.0', fecha: '2026-09-12', notas: [
       'Estadísticas: filtro por fecha con Este mes, Mes pasado, Este año, Todo, o un rango Personalizado eligiendo desde y hasta.',
       'El total de Estadísticas ahora también dice cuántos gastos entran en el rango elegido.',
@@ -1172,7 +1175,7 @@
   function renderVersionesOverlay() {
     const entradas = CHANGELOG.slice(0, 3).map((v) => `
       <div class="version-entry">
-        <div class="version-entry-header"><b>v${v.version}</b><span>${v.fecha}</span></div>
+        <div class="version-entry-header"><b>v${v.version}</b><span>${formatFecha(v.fecha)}</span></div>
         <ul>${v.notas.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
       </div>`).join('');
     return `
