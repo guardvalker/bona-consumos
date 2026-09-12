@@ -166,6 +166,9 @@
   .chip svg { width: 15px; height: 15px; color: var(--cat-color, currentColor); }
 
   .empty-state { text-align: center; color: var(--text-dim); padding: 2.5rem 1rem; font-size: 0.92rem; }
+  .stat-range-custom { display: flex; gap: 0.6rem; margin-top: 0.6rem; }
+  .stat-range-custom > div { flex: 1; min-width: 0; }
+  .stat-range-custom input { width: 100%; }
 
   .grupo-card {
     display: flex; justify-content: space-between; align-items: center;
@@ -382,16 +385,32 @@
   let authError = '';
   let filtroCategoria = null;
   let estadisticasTipo = 'torta'; // 'torta' | 'barras'
+  let estadisticasRango = 'todo'; // 'mes' | 'mesPasado' | 'anio' | 'todo' | 'custom'
+  let estadisticasDesde = ''; // solo para rango 'custom', ISO YYYY-MM-DD
+  let estadisticasHasta = '';
   let overlay = null;
   let pendingJoinCode = null;
 
   const MONEDAS = ['ARS', 'USD', 'EUR', 'BRL', 'UYU', 'CLP'];
 
+  const RANGOS_ESTADISTICAS = [
+    { key: 'mes', label: 'Este mes' },
+    { key: 'mesPasado', label: 'Mes pasado' },
+    { key: 'anio', label: 'Este año' },
+    { key: 'todo', label: 'Todo' },
+    { key: 'custom', label: 'Personalizado' },
+  ];
+
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.9.2';
+  const APP_VERSION = '1.10.0';
   const CHANGELOG = [
+    { version: '1.10.0', fecha: '2026-09-12', notas: [
+      'Estadísticas: filtro por fecha con Este mes, Mes pasado, Este año, Todo, o un rango Personalizado eligiendo desde y hasta.',
+      'El total de Estadísticas ahora también dice cuántos gastos entran en el rango elegido.',
+      'Fix Exportar CSV: en el celu el archivo bajaba a Descargas pero Android no tenía con qué abrirlo. Ahora se abre el menú de compartir para mandarlo directo a Drive, Sheets, mail o WhatsApp. En la compu sigue descargando como siempre.',
+    ] },
     { version: '1.9.2', fecha: '2026-08-25', notas: [
       'Fix: a veces al abrir la app aparecía un error de sesión/JWT abajo de todo. Ahora si el token guardado está por vencer justo al arrancar, se refresca solo y reintenta antes de mostrar cualquier error.',
     ] },
@@ -821,12 +840,8 @@
     return [headers, ...filas].map((f) => f.map(csvField).join(',')).join('\r\n');
   }
 
-  function descargarCsv() {
-    if (!grupoActivo) return;
-    const csv = gastosToCsv();
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  function descargarBlob(blob, nombreArchivo) {
     const url = URL.createObjectURL(blob);
-    const nombreArchivo = `gastos-${grupoActivo.nombre.replace(/[^a-z0-9]+/gi, '-')}-${todayIso()}.csv`;
     const a = document.createElement('a');
     a.href = url;
     a.download = nombreArchivo;
@@ -834,6 +849,35 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // En la PWA instalada en Android el archivo bajaba bien a Descargas, pero
+  // tocarlo no abría nada: Android no trae ninguna app registrada para
+  // text/csv de fábrica. Con el share sheet el usuario lo manda directo a
+  // Drive/Sheets/mail/WhatsApp, que sí saben qué hacer con un CSV. Si no hay
+  // Web Share con archivos (escritorio, Firefox) cae a la descarga de antes.
+  // Ojo: navigator.share exige gesto del usuario, así que esto tiene que
+  // arrancar sincrónico dentro del handler del click, sin await previo.
+  async function exportarCsv() {
+    if (!grupoActivo) return;
+    const csv = '﻿' + gastosToCsv();
+    const nombreArchivo = `gastos-${grupoActivo.nombre.replace(/[^a-z0-9]+/gi, '-')}-${todayIso()}.csv`;
+
+    if (typeof File === 'function' && navigator.canShare) {
+      const file = new File([csv], nombreArchivo, { type: 'text/csv' });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: nombreArchivo });
+          return;
+        } catch (e) {
+          // Cancelar el share sheet no es un error: no bajamos nada tampoco.
+          if (e && e.name === 'AbortError') return;
+          // Cualquier otra falla del share: seguimos con la descarga clásica.
+        }
+      }
+    }
+    descargarBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), nombreArchivo);
+    toast('CSV descargado a tu carpeta de Descargas');
   }
 
   // Parser CSV manual (soporta campos entre comillas con comas/comillas/
@@ -1137,6 +1181,23 @@
   }
 
   // ---- Overlay: estadísticas (dinámico por grupo activo) ----
+
+  // Límites ISO inclusivos del rango elegido ('' = sin límite). gc_gastos.fecha
+  // es un date de Postgres, o sea siempre 'YYYY-MM-DD', así que alcanza con
+  // comparar strings — sin parsear a Date ni pelear con zonas horarias.
+  function rangoEstadisticas() {
+    const hoy = new Date();
+    const y = hoy.getFullYear();
+    const m = hoy.getMonth();
+    // día 0 del mes siguiente = último día del mes pedido
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (estadisticasRango === 'mes') return { desde: iso(new Date(y, m, 1)), hasta: iso(new Date(y, m + 1, 0)) };
+    if (estadisticasRango === 'mesPasado') return { desde: iso(new Date(y, m - 1, 1)), hasta: iso(new Date(y, m, 0)) };
+    if (estadisticasRango === 'anio') return { desde: `${y}-01-01`, hasta: `${y}-12-31` };
+    if (estadisticasRango === 'custom') return { desde: estadisticasDesde, hasta: estadisticasHasta };
+    return { desde: '', hasta: '' };
+  }
+
   function renderEstadisticasOverlay() {
     if (!grupoActivo) {
       return `
@@ -1144,17 +1205,36 @@
         <div class="empty-state">No hay un grupo activo.</div>`;
     }
     const moneda = grupoActivo.monedaBase;
+    const header = `<div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>`;
+
+    // Los chips van siempre, incluso si el rango quedó vacío: si no, el usuario
+    // se queda trabado en el estado vacío sin forma de ampliar el filtro.
+    const chipsRango = RANGOS_ESTADISTICAS.map((r) =>
+      `<button class="chip ${estadisticasRango === r.key ? 'active' : ''}" data-set-estadisticas-rango="${r.key}">${r.label}</button>`
+    ).join('');
+    const customHtml = estadisticasRango === 'custom' ? `
+      <div class="stat-range-custom">
+        <div><label>Desde</label><input type="date" id="estDesde" value="${estadisticasDesde}"></div>
+        <div><label>Hasta</label><input type="date" id="estHasta" value="${estadisticasHasta}"></div>
+      </div>` : '';
+    const filtrosHtml = `<div class="chips">${chipsRango}</div>${customHtml}`;
+
+    if (!gastos.length) {
+      return `${header}<div class="empty-state">Todavía no hay gastos en este grupo.</div>`;
+    }
+
+    const { desde, hasta } = rangoEstadisticas();
+    const enRango = gastos.filter((g) => (!desde || g.fecha >= desde) && (!hasta || g.fecha <= hasta));
+
+    if (!enRango.length) {
+      return `${header}${filtrosHtml}<div class="empty-state">No hay gastos en el rango elegido.</div>`;
+    }
+
     const totales = {};
-    gastos.forEach((g) => { totales[g.categoria] = (totales[g.categoria] || 0) + g.montoBase; });
+    enRango.forEach((g) => { totales[g.categoria] = (totales[g.categoria] || 0) + g.montoBase; });
     const filas = Object.keys(totales)
       .map((cat) => ({ categoria: cat, valor: totales[cat], colorVar: ICON_KEY_COLOR[iconKeyFor(cat)] || '--ctp-lavender' }))
       .sort((a, b) => b.valor - a.valor);
-
-    if (!filas.length) {
-      return `
-        <div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
-        <div class="empty-state">Todavía no hay gastos en este grupo.</div>`;
-    }
 
     const totalGeneral = filas.reduce((a, f) => a + f.valor, 0);
     const chartData = filas.map((f) => ({ value: f.valor, colorVar: f.colorVar }));
@@ -1171,14 +1251,16 @@
         </div>`;
     }).join('');
 
+    const plural = enRango.length === 1 ? '1 gasto' : `${enRango.length} gastos`;
     return `
-      <div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      ${header}
+      ${filtrosHtml}
       <div class="chips">
         <button class="chip ${estadisticasTipo === 'torta' ? 'active' : ''}" data-set-estadisticas-tipo="torta">Torta</button>
         <button class="chip ${estadisticasTipo === 'barras' ? 'active' : ''}" data-set-estadisticas-tipo="barras">Barras</button>
       </div>
       ${chartHtml}
-      <div class="section-title" style="margin-top:0.5rem">Total: ${fmt(totalGeneral, moneda)}</div>
+      <div class="section-title" style="margin-top:0.5rem">Total: ${fmt(totalGeneral, moneda)} <small>(${plural})</small></div>
       <div>${leyenda}</div>`;
   }
 
@@ -1477,6 +1559,21 @@
       estadisticasTipo = el.getAttribute('data-set-estadisticas-tipo');
       render();
     });
+    on('[data-set-estadisticas-rango]', 'click', (el) => {
+      estadisticasRango = el.getAttribute('data-set-estadisticas-rango');
+      // Entrar a "Personalizado" con los dos campos vacíos muestra el estado
+      // vacío sin que el usuario haya elegido nada — se precarga el mes actual.
+      if (estadisticasRango === 'custom' && !estadisticasDesde && !estadisticasHasta) {
+        const hoy = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        estadisticasDesde = `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-01`;
+        const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+        estadisticasHasta = `${fin.getFullYear()}-${pad(fin.getMonth() + 1)}-${pad(fin.getDate())}`;
+      }
+      render();
+    });
+    on('#estDesde', 'change', (el) => { estadisticasDesde = el.value; render(); });
+    on('#estHasta', 'change', (el) => { estadisticasHasta = el.value; render(); });
 
     on('#btnActualizar', 'click', async (el) => {
       el.disabled = true;
@@ -1528,7 +1625,7 @@
     on('#btnExportarCsv', 'click', () => {
       if (!grupoActivo) return toast('No hay un grupo activo');
       if (!gastos.length) return toast('Este grupo todavía no tiene gastos');
-      descargarCsv();
+      exportarCsv();
     });
     on('#btnImportarCsv', 'click', () => {
       if (!grupoActivo) return toast('No hay un grupo activo');
