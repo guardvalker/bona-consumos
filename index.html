@@ -242,6 +242,7 @@
   .filter-bar select {
     border: none; background: transparent; margin-top: 0; padding: 0.7rem 0;
     font-size: 0.95rem; font-weight: 600; flex: 1; min-width: 0;
+    outline: none; /* al cerrar la lista tocando afuera el select queda enfocado y dibujaba un aro encima del texto */
   }
 
   .category-grid {
@@ -422,8 +423,12 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.0';
+  const APP_VERSION = '1.11.1';
   const CHANGELOG = [
+    { version: '1.11.1', fecha: '2026-09-18', notas: [
+      'El botón "atrás" del celu (o el gesto de volver) ahora va al menú anterior, paso por paso, hasta llegar a la pantalla principal, en vez de salir de la app. Ej: Ajustes → Estadísticas → atrás vuelve a Ajustes → atrás vuelve al inicio.',
+      'Fix visual: al abrir el filtro de movimientos y tocar afuera para cerrarlo, quedaba un borde de selección sobre "Todos los movimientos". Ya no aparece.',
+    ] },
     { version: '1.11.0', fecha: '2026-09-18', notas: [
       'Los pagos saldados ("Marcar pagado") ahora aparecen en el historial junto a los gastos, con su propio ícono y en verde. No cuentan en Estadísticas.',
       'Exportar CSV incluye los pagos saldados (columna nueva "tipo"), y Importar CSV los vuelve a cargar como pagos.',
@@ -1130,26 +1135,73 @@
   }
 
   // ---- Overlays ----
+  // Pila de overlays sincronizada con el historial del navegador: cada
+  // openOverlay() empuja una entrada de historial, así el botón "atrás" del
+  // sistema (Android, gesto de iOS, navegador) vuelve al menú anterior hasta
+  // llegar a la pantalla principal, en vez de sacar al usuario de la app.
+  // history.state.bonaDepth = cuántos overlays hay abiertos en esa entrada.
+  let overlayStack = []; // overlays por debajo del actual
+  const overlayDepth = () => (overlay ? overlayStack.length + 1 : 0);
+
+  function applyOverlayVisibility() {
+    const abierto = !!overlay;
+    document.getElementById('overlayBackdrop').classList.toggle('open', abierto);
+    document.getElementById('overlaySheet').classList.toggle('open', abierto);
+  }
+
+  function pushOverlayHistory() {
+    try { history.pushState({ bonaDepth: overlayDepth() }, ''); } catch (e) {}
+  }
+
+  // Sube un nivel: al overlay anterior, o a la pantalla principal.
+  function volverOverlay() {
+    if (!overlay) return;
+    overlay = overlayStack.pop() || null;
+    applyOverlayVisibility();
+    render();
+    try { history.back(); } catch (e) {}
+  }
+
+  // Cierra todo (✕, fondo, o acción terminada) y deshace las entradas de
+  // historial que abrió, para que "atrás" no reabra nada ni quede trabado.
   function closeOverlay() {
+    if (!overlay) return;
     // El overlay de "nueva categoría" se abre desde arriba del formulario de
     // gasto — cerrarlo con la ✕ tiene que volver al gasto en progreso, no
     // tirar todo el draft.
-    if (overlay && overlay.type === 'nuevaCategoria' && overlay.prevOverlay) {
-      overlay = overlay.prevOverlay;
-      return render();
-    }
+    if (overlay.type === 'nuevaCategoria' && overlayStack.length) return volverOverlay();
+    const depth = overlayDepth();
     overlay = null;
-    document.getElementById('overlayBackdrop').classList.remove('open');
-    document.getElementById('overlaySheet').classList.remove('open');
+    overlayStack = [];
+    applyOverlayVisibility();
     render();
+    try { history.go(-depth); } catch (e) {}
   }
 
   function openOverlay(next) {
+    if (overlay) overlayStack.push(overlay);
     overlay = next;
+    pushOverlayHistory();
     render();
-    document.getElementById('overlayBackdrop').classList.add('open');
-    document.getElementById('overlaySheet').classList.add('open');
+    applyOverlayVisibility();
   }
+
+  // "Atrás" del sistema. Es idempotente: baja la pila hasta la profundidad
+  // que dice la entrada de historial, así sirve tanto para un paso como para
+  // el history.go(-n) de closeOverlay() (que ya dejó la pila en 0).
+  window.addEventListener('popstate', (ev) => {
+    const objetivo = (ev.state && ev.state.bonaDepth) || 0;
+    if (objetivo > overlayDepth()) {
+      // "Adelante" hacia un overlay que ya no existe: volvemos a donde estamos.
+      try { history.go(overlayDepth() - objetivo); } catch (e) {}
+      return;
+    }
+    if (objetivo === overlayDepth()) return;
+    while (overlayDepth() > objetivo) overlay = overlayStack.pop() || null;
+    applyOverlayVisibility();
+    render();
+  });
+  try { history.replaceState({ bonaDepth: 0 }, ''); } catch (e) {}
 
   function renderOverlay() {
     const body = document.getElementById('overlayBody');
@@ -1775,6 +1827,7 @@
 
     on('#filtroMovimientos', 'change', (el) => {
       filtroCategoria = el.value || null;
+      el.blur();
       render();
     });
 
@@ -1788,7 +1841,7 @@
       ev.preventDefault();
       const enUso = iconKeysEnUso();
       const primerDisponible = ICON_PICKER_KEYS.find((k) => !enUso.has(k)) || 'dots';
-      openOverlay({ type: 'nuevaCategoria', prevOverlay: overlay, draft: { nombre: '', icono: primerDisponible } });
+      openOverlay({ type: 'nuevaCategoria', draft: { nombre: '', icono: primerDisponible } });
     });
     on('#nuevaCatInput', 'input', (el) => {
       if (!overlay || overlay.type !== 'nuevaCategoria') return;
@@ -1808,10 +1861,10 @@
         // este punto — no hace falta (ni conviene, duplicaría la entrada)
         // empujarla acá también.
         await window.Sync.addCategoriaCustom(nombre, overlay.draft.icono);
-        overlay = overlay.prevOverlay;
-        overlay.draft.categoria = nombre;
-        overlay.draft.descripcion = nombre;
-        render();
+        const gastoOverlay = overlayStack[overlayStack.length - 1];
+        gastoOverlay.draft.categoria = nombre;
+        gastoOverlay.draft.descripcion = nombre;
+        volverOverlay();
       } catch (e) { toast(e.message || 'No se pudo agregar'); }
     });
 
