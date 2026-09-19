@@ -227,6 +227,23 @@
   .gasto-row .monto { font-weight: 700; font-size: 0.94rem; text-align: right; white-space: nowrap; }
   .gasto-row .monto small { display: block; font-weight: 400; color: var(--text-dim); font-size: 0.7rem; }
 
+  .gasto-row.pago .cat-icon { background: color-mix(in srgb, var(--ctp-green) 16%, var(--card)); }
+  .gasto-row.pago .cat-icon svg { color: var(--ctp-green); }
+  .gasto-row.pago .monto { color: var(--ctp-green); }
+  .gasto-row[data-edit-gasto] { cursor: pointer; }
+
+  .filter-bar {
+    display: flex; align-items: center; gap: 0.6rem;
+    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px;
+    border-left: 3px solid var(--cat-color, var(--accent));
+    padding: 0 0.8rem; margin-top: 0.4rem;
+  }
+  .filter-bar > svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--cat-color, var(--accent)); }
+  .filter-bar select {
+    border: none; background: transparent; margin-top: 0; padding: 0.7rem 0;
+    font-size: 0.95rem; font-weight: 600; flex: 1; min-width: 0;
+  }
+
   .category-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.4rem;
   }
@@ -383,7 +400,8 @@
   let authEmail = '';
   let authBusy = false;
   let authError = '';
-  let filtroCategoria = null;
+  const FILTRO_PAGOS = '__pagos__';
+  let filtroCategoria = null; // null = todos, FILTRO_PAGOS, o nombre de categoría
   let estadisticasTipo = 'torta'; // 'torta' | 'barras'
   let estadisticasRango = 'todo'; // 'mes' | 'mesPasado' | 'anio' | 'todo' | 'custom'
   let estadisticasDesde = ''; // solo para rango 'custom', ISO YYYY-MM-DD
@@ -404,8 +422,14 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.10.1';
+  const APP_VERSION = '1.11.0';
   const CHANGELOG = [
+    { version: '1.11.0', fecha: '2026-09-18', notas: [
+      'Los pagos saldados ("Marcar pagado") ahora aparecen en el historial junto a los gastos, con su propio ícono y en verde. No cuentan en Estadísticas.',
+      'Exportar CSV incluye los pagos saldados (columna nueva "tipo"), y Importar CSV los vuelve a cargar como pagos.',
+      'El filtro de gastos ahora es un desplegable (Todos, cada categoría con su cantidad, y Pagos saldados) en vez de una tira de botones.',
+      'Fix: un gasto cargado con una fecha anterior ahora se ubica en su lugar de la cronología según la fecha del gasto, no según cuándo lo cargaste. Si hay varios el mismo día, va primero el último cargado.',
+    ] },
     { version: '1.10.1', fecha: '2026-09-12', notas: [
       'Fix: la fecha en el historial de versiones se mostraba como año-mes-día (ej. 2026-09-12). Ahora usa el mismo formato día/mes/año que el resto de la app.',
     ] },
@@ -733,15 +757,57 @@
         }).join('')
       : `<div class="empty-state" style="padding:1rem">Todo saldado ✓</div>`;
 
-    const categorias = todasCategorias();
-    const chipsCat = [`<button class="chip ${!filtroCategoria ? 'active' : ''}" data-filtro-cat="">Todas</button>`]
-      .concat(categorias.filter((c) => gastos.some((g) => g.categoria === c)).map((c) =>
-        `<button class="chip ${filtroCategoria === c ? 'active' : ''}" data-filtro-cat="${escapeHtml(c)}" style="${catColorStyle(c)}">${icon(c)} ${escapeHtml(c)}</button>`
-      )).join('');
+    const categorias = todasCategorias().filter((c) => gastos.some((g) => g.categoria === c));
+    // Si el filtro guardado ya no existe (categoría sin gastos, o sin pagos),
+    // el select caería en "Todos" mientras la lista seguiría filtrada: se normaliza.
+    const filtroActivo = filtroCategoria === FILTRO_PAGOS
+      ? (settlements.length ? FILTRO_PAGOS : null)
+      : (categorias.includes(filtroCategoria) ? filtroCategoria : null);
 
-    const gastosFiltrados = filtroCategoria ? gastos.filter((g) => g.categoria === filtroCategoria) : gastos;
-    const gastosHtml = gastosFiltrados.length
-      ? gastosFiltrados.map((g) => {
+    const totalMov = gastos.length + settlements.length;
+    const opcionesFiltro = [`<option value="" ${!filtroActivo ? 'selected' : ''}>Todos los movimientos (${totalMov})</option>`]
+      .concat(categorias.map((c) => {
+        const n = gastos.filter((g) => g.categoria === c).length;
+        return `<option value="${escapeHtml(c)}" ${filtroActivo === c ? 'selected' : ''}>${escapeHtml(c)} (${n})</option>`;
+      }));
+    if (settlements.length) {
+      opcionesFiltro.push(`<option value="${FILTRO_PAGOS}" ${filtroActivo === FILTRO_PAGOS ? 'selected' : ''}>Pagos saldados (${settlements.length})</option>`);
+    }
+    const filtroStyle = filtroActivo && filtroActivo !== FILTRO_PAGOS ? catColorStyle(filtroActivo) : '';
+    const filtroHtml = `
+      <div class="filter-bar" style="${filtroStyle}">
+        ${filterIconSvg()}
+        <select id="filtroMovimientos" aria-label="Filtrar movimientos">${opcionesFiltro.join('')}</select>
+      </div>`;
+
+    // Gastos y pagos saldados en una sola cronología por la fecha del
+    // movimiento (no por cuándo se cargó); el mismo día desempata la hora de carga.
+    const movimientos = [
+      ...gastos.map((g) => ({ tipo: 'gasto', fecha: g.fecha, creadoEn: g.creadoEn || '', g })),
+      ...settlements.map((st) => ({ tipo: 'pago', fecha: st.fecha, creadoEn: st.creadoEn || '', st })),
+    ].sort((x, y) => (x.fecha < y.fecha ? 1 : x.fecha > y.fecha ? -1 : x.creadoEn < y.creadoEn ? 1 : x.creadoEn > y.creadoEn ? -1 : 0));
+
+    const visibles = movimientos.filter((m) => {
+      if (!filtroActivo) return true;
+      if (filtroActivo === FILTRO_PAGOS) return m.tipo === 'pago';
+      return m.tipo === 'gasto' && m.g.categoria === filtroActivo;
+    });
+
+    const gastosHtml = visibles.length
+      ? visibles.map((m) => {
+          if (m.tipo === 'pago') {
+            const st = m.st;
+            return `
+              <div class="gasto-row pago" style="--payer-color:${colorForUser(st.deUsuarioId)}">
+                <div class="cat-icon">${checkIconSvg()}</div>
+                <div class="mid">
+                  <div class="desc">${escapeHtml(payerName(st.deUsuarioId))} le pagó a ${escapeHtml(payerName(st.aUsuarioId))}</div>
+                  <div class="meta"><span class="payer-dot"></span>Pago saldado · ${formatFecha(st.fecha)}${st.nota ? ` · ${escapeHtml(st.nota)}` : ''}</div>
+                </div>
+                <div class="monto">${fmt(st.monto, st.moneda || moneda)}</div>
+              </div>`;
+          }
+          const g = m.g;
           const distinta = g.moneda !== moneda;
           const colorPagador = colorForUser(g.pagadoPor);
           return `
@@ -754,7 +820,7 @@
               <div class="monto">${fmt(g.montoBase, moneda)}${distinta ? `<small>${fmt(g.monto, g.moneda)}</small>` : ''}</div>
             </div>`;
         }).join('')
-      : `<div class="empty-state">No hay gastos ${filtroCategoria ? 'en esta categoría' : 'todavía'}.</div>`;
+      : `<div class="empty-state">${filtroActivo === FILTRO_PAGOS ? 'No hay pagos saldados.' : filtroActivo ? 'No hay gastos en esta categoría.' : 'No hay gastos todavía.'}</div>`;
 
     return topBar + `
       <div class="card balance-hero">
@@ -765,8 +831,8 @@
       <div class="section-title">Saldos</div>
       <div class="card">${deudasHtml}</div>
 
-      <div class="section-title">Gastos</div>
-      <div class="chips">${chipsCat}</div>
+      <div class="section-title">Movimientos</div>
+      ${filtroHtml}
       <div style="margin-top:0.75rem">${gastosHtml}</div>
 
       <div class="fab">
@@ -802,6 +868,14 @@
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 19h16"/></svg>`;
   }
 
+  function filterIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>`;
+  }
+
+  function checkIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>`;
+  }
+
   function chartIconSvg() {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>`;
   }
@@ -828,18 +902,36 @@
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
 
+  // Una fila por gasto y una por pago saldado (tipo = pago): el pago va con
+  // pagado_por = quien pagó y participantes = "Receptor:monto". Los pagos no
+  // cuentan en Estadísticas, pero el CSV sí tiene que reflejarlos.
   function gastosToCsv() {
     const moneda = grupoActivo.monedaBase;
-    const headers = ['fecha', 'descripcion', 'categoria', 'monto', 'moneda', 'tasa_cambio', 'monto_base', 'moneda_base', 'pagado_por', 'tipo_split', 'participantes', 'notas'];
-    const filas = gastos.map((g) => {
+    const headers = ['tipo', 'fecha', 'descripcion', 'categoria', 'monto', 'moneda', 'tasa_cambio', 'monto_base', 'moneda_base', 'pagado_por', 'tipo_split', 'participantes', 'notas'];
+    const filasGastos = gastos.map((g) => {
       const participantes = g.shares.map((s) => `${displayNameForExport(s.usuarioId)}:${s.montoBase}`).join(';');
-      return [
-        g.fecha, g.descripcion, g.categoria, g.monto, g.moneda,
-        g.tasaCambio != null ? g.tasaCambio : '', g.montoBase, moneda,
-        displayNameForExport(g.pagadoPor), g.shares[0] ? g.shares[0].tipoSplit : 'igual',
-        participantes, g.notas || '',
-      ];
+      return {
+        fecha: g.fecha, creadoEn: g.creadoEn || '',
+        fila: [
+          'gasto', g.fecha, g.descripcion, g.categoria, g.monto, g.moneda,
+          g.tasaCambio != null ? g.tasaCambio : '', g.montoBase, moneda,
+          displayNameForExport(g.pagadoPor), g.shares[0] ? g.shares[0].tipoSplit : 'igual',
+          participantes, g.notas || '',
+        ],
+      };
     });
+    const filasPagos = settlements.map((st) => ({
+      fecha: st.fecha, creadoEn: st.creadoEn || '',
+      fila: [
+        'pago', st.fecha, 'Pago saldado', '', st.monto, st.moneda || moneda,
+        '', st.monto, moneda,
+        displayNameForExport(st.deUsuarioId), '',
+        `${displayNameForExport(st.aUsuarioId)}:${st.monto}`, st.nota || '',
+      ],
+    }));
+    const filas = [...filasGastos, ...filasPagos]
+      .sort((x, y) => (x.fecha < y.fecha ? 1 : x.fecha > y.fecha ? -1 : x.creadoEn < y.creadoEn ? 1 : x.creadoEn > y.creadoEn ? -1 : 0))
+      .map((x) => x.fila);
     return [headers, ...filas].map((f) => f.map(csvField).join(',')).join('\r\n');
   }
 
@@ -937,6 +1029,27 @@
 
       const pagadoPor = porNombre.get(get('pagado_por').toLowerCase());
       if (!pagadoPor) { saltados.push(`Fila ${filaNum}: no encontré a "${get('pagado_por')}" entre los miembros`); continue; }
+
+      // Los CSV anteriores a la v1.11.0 no tienen columna tipo: todo es gasto.
+      if (get('tipo').toLowerCase() === 'pago') {
+        const [nombreReceptor] = get('participantes').split(';')[0].split(':');
+        const aUsuarioId = porNombre.get((nombreReceptor || '').trim().toLowerCase());
+        if (!aUsuarioId) { saltados.push(`Fila ${filaNum}: no encontré a "${nombreReceptor}" entre los miembros`); continue; }
+        const montoPago = Number(get('monto'));
+        if (!montoPago || montoPago <= 0) { saltados.push(`Fila ${filaNum}: monto inválido`); continue; }
+        try {
+          await window.Sync.saveSettlement({
+            id: uid(), deUsuarioId: pagadoPor, aUsuarioId, monto: montoPago,
+            moneda: get('moneda') || grupoActivo.monedaBase,
+            fecha: /^\d{4}-\d{2}-\d{2}$/.test(get('fecha')) ? get('fecha') : todayIso(),
+            nota: get('notas') || '',
+          });
+          importados++;
+        } catch (e) {
+          saltados.push(`Fila ${filaNum}: ${e.message || 'error al guardar'}`);
+        }
+        continue;
+      }
 
       const partesTxt = get('participantes').split(';').map((p) => p.trim()).filter(Boolean);
       const shares = [];
@@ -1660,8 +1773,8 @@
       catch (e) { toast(e.message || 'No se pudo eliminar'); }
     });
 
-    on('[data-filtro-cat]', 'click', (el) => {
-      filtroCategoria = el.getAttribute('data-filtro-cat') || null;
+    on('#filtroMovimientos', 'change', (el) => {
+      filtroCategoria = el.value || null;
       render();
     });
 

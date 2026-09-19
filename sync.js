@@ -296,7 +296,7 @@ window.Sync = (function () {
 
   async function fetchGrupoState() {
     const [gastosRes, settlementsRes, categoriasRes, miembrosRes] = await Promise.all([
-      sb.from('gc_gastos').select('*').eq('grupo_id', grupoId).order('creado_en', { ascending: false }),
+      sb.from('gc_gastos').select('*').eq('grupo_id', grupoId).order('fecha', { ascending: false }).order('creado_en', { ascending: false }),
       sb.from('gc_settlements').select('*').eq('grupo_id', grupoId),
       sb.from('gc_categorias').select('*').eq('grupo_id', grupoId),
       sb.from('gc_miembros').select('*').eq('grupo_id', grupoId),
@@ -343,6 +343,7 @@ window.Sync = (function () {
       moneda: s.moneda,
       fecha: s.fecha,
       nota: s.nota,
+      creadoEn: s.creado_en,
     }));
 
     const categoriasCustom = categoriasRes.data.map((c) => ({ nombre: c.nombre, icono: c.icono }));
