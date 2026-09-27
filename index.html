@@ -435,8 +435,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.2';
+  const APP_VERSION = '1.11.3';
   const CHANGELOG = [
+    { version: '1.11.3', fecha: '2026-09-27', notas: [
+      'Fix: con un menú abierto (Ajustes, Estadísticas, etc.) ya no se puede scrollear la pantalla principal de fondo.',
+    ] },
     { version: '1.11.2', fecha: '2026-09-27', notas: [
       'Fix: las fechas de Estadísticas (y de "Nuevo gasto" y "Marcar pagado") ahora siempre se muestran en formato local dd/mm/aa, sin importar el idioma configurado en el celular.',
     ] },
@@ -1158,10 +1161,31 @@
   let overlayStack = []; // overlays por debajo del actual
   const overlayDepth = () => (overlay ? overlayStack.length + 1 : 0);
 
+  // Con el overlay abierto, la pantalla de fondo (home) no debe scrollear —
+  // overflow:hidden en el body no alcanza en iOS instalado como PWA (sigue
+  // habiendo rubber-band), así que se lo saca del flujo con position:fixed
+  // guardando el scroll actual, y se lo restaura tal cual al cerrar.
+  let scrollLockY = 0;
+  let scrollLocked = false;
   function applyOverlayVisibility() {
     const abierto = !!overlay;
     document.getElementById('overlayBackdrop').classList.toggle('open', abierto);
     document.getElementById('overlaySheet').classList.toggle('open', abierto);
+    if (abierto && !scrollLocked) {
+      scrollLockY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollLockY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      scrollLocked = true;
+    } else if (!abierto && scrollLocked) {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      scrollLocked = false;
+      window.scrollTo(0, scrollLockY);
+    }
   }
 
   function pushOverlayHistory() {
