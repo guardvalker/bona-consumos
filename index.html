@@ -94,6 +94,13 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Android no tiene rebote elástico en los bordes, iOS (Safari/WKWebView)
+       sí — y ese mismo rebote es lo que dispara el gesto nativo de "volver
+       atrás" al deslizar desde el borde (se ve como si abriera otra pantalla
+       o una versión vieja) y lo que hace que un overlay position:fixed
+       parezca arrastrarse por toda la pantalla al tironear de un scroll que
+       ya llegó al tope/fondo. overscroll-behavior: none lo desactiva. */
+    overscroll-behavior: none;
   }
   button, input, select, textarea { font-family: inherit; }
   button { touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
@@ -298,7 +305,7 @@
     background: var(--bg); border-radius: 20px 20px 0 0;
     border-top: 3px solid var(--accent);
     padding: 1rem 1.1rem calc(1.5rem + env(safe-area-inset-bottom));
-    overflow-y: auto; z-index: 11;
+    overflow-y: auto; overscroll-behavior: contain; z-index: 11;
     transform: translateY(100%); transition: transform 0.26s ease-out;
   }
   .overlay-sheet.open { transform: translateY(0); }
@@ -515,8 +522,12 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.8';
+  const APP_VERSION = '1.11.9';
   const CHANGELOG = [
+    { version: '1.11.9', fecha: '2026-09-27', notas: [
+      'Fix iOS: deslizar cerca del borde ya no dispara el gesto nativo de "volver atrás" del navegador (parecía abrir otra pantalla/versión vieja de la app). Fix iOS: los menús (como "Cargar gasto") ya no se arrastran/tironean por toda la pantalla.',
+      'La "✕" de cerrar de todos los menús pasó de texto a ícono propio, para que se vea siempre igual sin depender de la fuente/versión de iOS o Android.',
+    ] },
     { version: '1.11.8', fecha: '2026-09-27', notas: [
       'Menos "salto" en las animaciones: los menús (Ajustes, Estadísticas, etc.) ahora solo se deslizan, sin rebote. Elegir categoría y confirmar un gasto/pago ya no hacen zoom, se nota en el color en vez de en el movimiento.',
     ] },
@@ -1062,6 +1073,15 @@
       </div>`;
   }
 
+  // La "✕" de cerrar era el único ícono de toda la app hecho con un
+  // carácter de texto en vez de SVG — depende de la fuente del sistema, así
+  // que se ve distinto (grosor/tamaño) entre iOS y Android, y hasta puede
+  // cambiar de una actualización de iOS a otra. SVG propio para que se vea
+  // siempre igual, como el resto de los íconos.
+  function closeIconSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M19 5L5 19"/></svg>`;
+  }
+
   function gearIconSvg() {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
   }
@@ -1376,12 +1396,14 @@
       document.body.style.top = `-${scrollLockY}px`;
       document.body.style.left = '0';
       document.body.style.right = '0';
+      document.documentElement.style.overflow = 'hidden';
       scrollLocked = true;
     } else if (!abierto && scrollLocked) {
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.left = '';
       document.body.style.right = '';
+      document.documentElement.style.overflow = '';
       scrollLocked = false;
       window.scrollTo(0, scrollLockY);
     }
@@ -1477,7 +1499,7 @@
     const gestionGrupoActivo = grupoActivo ? renderGestionGrupoActivo() : '';
 
     return `
-      <div class="sheet-header"><h2>Mis grupos</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Mis grupos</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       ${gestionGrupoActivo}
       <div class="section-title" style="margin-top:${gestionGrupoActivo ? '1.5rem' : '0'}">Cambiar de grupo</div>
       ${listHtml}
@@ -1520,7 +1542,7 @@
 
   function renderCrearGrupoOverlay() {
     return `
-      <div class="sheet-header"><h2>Crear grupo</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Crear grupo</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>Nombre del grupo</label>
       <input type="text" id="cgNombre" placeholder="Depto, Viaje a Bariloche…">
       <label>Moneda base</label>
@@ -1532,7 +1554,7 @@
 
   function renderUnirseGrupoOverlay() {
     return `
-      <div class="sheet-header"><h2>Unirme a un grupo</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Unirme a un grupo</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>Pegá el link o el código que te compartieron</label>
       <input type="text" id="jgInput" placeholder="https://…?grupo=…">
       <div class="btn-block-row">
@@ -1546,7 +1568,7 @@
       <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:1.25rem">
         <button class="icon-btn" id="btnTogglePalette" title="Cambiar paleta de color">${paletteIconSvg()}</button>
         <button class="icon-btn" id="btnToggleTheme" title="Cambiar tema">${themeToggleIconSvg(theme)}</button>
-        <button class="icon-btn" id="btnCerrarOverlay">✕</button>
+        <button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button>
       </div>
 
       <div class="app-info">
@@ -1582,7 +1604,7 @@
         <ul>${v.notas.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
       </div>`).join('');
     return `
-      <div class="sheet-header"><h2>Últimas versiones</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Últimas versiones</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <div class="version-list">${entradas}</div>`;
   }
 
@@ -1607,11 +1629,11 @@
   function renderEstadisticasOverlay() {
     if (!grupoActivo) {
       return `
-        <div class="sheet-header"><h2>Estadísticas</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+        <div class="sheet-header"><h2>Estadísticas</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
         <div class="empty-state">No hay un grupo activo.</div>`;
     }
     const moneda = grupoActivo.monedaBase;
-    const header = `<div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>`;
+    const header = `<div class="sheet-header"><h2>Estadísticas — ${escapeHtml(grupoActivo.nombre)}</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>`;
 
     // Los chips van siempre, incluso si el rango quedó vacío: si no, el usuario
     // se queda trabado en el estado vacío sin forma de ampliar el filtro.
@@ -1682,7 +1704,7 @@
       `<button class="icon-picker-tile ${draft.icono === k ? 'active' : ''}" data-set-nueva-cat-icono="${k}" style="${iconKeyColorStyle(k)}" title="">${svgForKey(k)}</button>`
     ).join('');
     return `
-      <div class="sheet-header"><h2>Nueva categoría</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Nueva categoría</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>Nombre</label>
       <input type="text" id="nuevaCatInput" value="${escapeHtml(draft.nombre)}" placeholder="Ej: Mascotas">
       <label>Ícono</label>
@@ -1779,7 +1801,7 @@
     const necesitaTasa = draft.moneda !== moneda;
 
     return `
-      <div class="sheet-header"><h2>${editando ? 'Editar gasto' : 'Cargar gasto'}</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>${editando ? 'Editar gasto' : 'Cargar gasto'}</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
 
       <div class="row-2">
         <div>
@@ -1874,7 +1896,7 @@
     const opts = miembros.map((m) => `<option value="${m.usuarioId}" ${ov.draft.deUsuarioId === m.usuarioId ? 'selected' : ''}>${escapeHtml(displayName(m.usuarioId))}</option>`);
     const optsA = miembros.map((m) => `<option value="${m.usuarioId}" ${ov.draft.aUsuarioId === m.usuarioId ? 'selected' : ''}>${escapeHtml(displayName(m.usuarioId))}</option>`);
     return `
-      <div class="sheet-header"><h2>Marcar como pagado</h2><button class="icon-btn" id="btnCerrarOverlay">✕</button></div>
+      <div class="sheet-header"><h2>Marcar como pagado</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>¿Quién pagó?</label>
       <select id="stDe">${opts.join('')}</select>
       <label>¿A quién?</label>
