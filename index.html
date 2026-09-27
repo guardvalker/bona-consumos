@@ -99,8 +99,13 @@
        atrás" al deslizar desde el borde (se ve como si abriera otra pantalla
        o una versión vieja) y lo que hace que un overlay position:fixed
        parezca arrastrarse por toda la pantalla al tironear de un scroll que
-       ya llegó al tope/fondo. overscroll-behavior: none lo desactiva. */
+       ya llegó al tope/fondo. overscroll-behavior no alcanzó solo: el gesto
+       de "volver atrás" de iOS se engancha al reconocedor de gestos táctiles
+       de más bajo nivel, no solo a la física de scroll — touch-action:pan-y
+       le dice directo que el pan horizontal no es un gesto válido acá
+       (esta app no tiene ningún scroll horizontal legítimo). */
     overscroll-behavior: none;
+    touch-action: pan-y;
   }
   button, input, select, textarea { font-family: inherit; }
   button { touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
@@ -305,7 +310,7 @@
     background: var(--bg); border-radius: 20px 20px 0 0;
     border-top: 3px solid var(--accent);
     padding: 1rem 1.1rem calc(1.5rem + env(safe-area-inset-bottom));
-    overflow-y: auto; overscroll-behavior: contain; z-index: 11;
+    overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; z-index: 11;
     transform: translateY(100%); transition: transform 0.26s ease-out;
   }
   .overlay-sheet.open { transform: translateY(0); }
@@ -522,8 +527,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.9';
+  const APP_VERSION = '1.11.10';
   const CHANGELOG = [
+    { version: '1.11.10', fecha: '2026-09-27', notas: [
+      'Segunda vuelta al fix de iOS: overscroll-behavior solo no alcanzaba. Se agregó touch-action:pan-y (bloquea el pan horizontal a nivel de gesto táctil, no solo de scroll) en toda la app y en el sheet de los menús, para el swipe de borde y el arrastre del sheet de "Cargar gasto".',
+    ] },
     { version: '1.11.9', fecha: '2026-09-27', notas: [
       'Fix iOS: deslizar cerca del borde ya no dispara el gesto nativo de "volver atrás" del navegador (parecía abrir otra pantalla/versión vieja de la app). Fix iOS: los menús (como "Cargar gasto") ya no se arrastran/tironean por toda la pantalla.',
       'La "✕" de cerrar de todos los menús pasó de texto a ícono propio, para que se vea siempre igual sin depender de la fuente/versión de iOS o Android.',
