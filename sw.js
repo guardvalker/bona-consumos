@@ -1,4 +1,4 @@
-const CACHE = "bonapp-gastos-v23";
+const CACHE = "bonapp-gastos-v24";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./config.js", "./logic.js", "./charts.js", "./sync.js"];
 
 self.addEventListener("install", (event) => {
