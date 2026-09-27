@@ -153,6 +153,18 @@
     font-size: 1rem; margin-top: 0.3rem;
   }
   textarea { resize: vertical; min-height: 3rem; }
+
+  /* El texto de <input type="date"> lo formatea el idioma/región del
+     navegador, no el lang="es-AR" de la página — así que puede salir en
+     formato USA aunque el resto de la app esté en español. Se lo oculta
+     (color transparent) y se superpone un span con formatFecha() en
+     dd/mm/aa; el input sigue debajo intacto para abrir el picker nativo. */
+  .date-field { position: relative; margin-top: 0.3rem; }
+  .date-field input[type="date"] { margin-top: 0; color: transparent; }
+  .date-field .date-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    padding: 0 0.8rem; font-size: 1rem; color: var(--text); pointer-events: none;
+  }
   label { font-size: 0.82rem; color: var(--text-dim); display: block; margin-top: 0.85rem; }
   label:first-child { margin-top: 0; }
 
@@ -423,8 +435,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.1';
+  const APP_VERSION = '1.11.2';
   const CHANGELOG = [
+    { version: '1.11.2', fecha: '2026-09-27', notas: [
+      'Fix: las fechas de Estadísticas (y de "Nuevo gasto" y "Marcar pagado") ahora siempre se muestran en formato local dd/mm/aa, sin importar el idioma configurado en el celular.',
+    ] },
     { version: '1.11.1', fecha: '2026-09-18', notas: [
       'El botón "atrás" del celu (o el gesto de volver) ahora va al menú anterior, paso por paso, hasta llegar a la pantalla principal, en vez de salir de la app. Ej: Ajustes → Estadísticas → atrás vuelve a Ajustes → atrás vuelve al inicio.',
       'Fix visual: al abrir el filtro de movimientos y tocar afuera para cerrarlo, quedaba un borde de selección sobre "Todos los movimientos". Ya no aparece.',
@@ -1382,8 +1397,8 @@
     ).join('');
     const customHtml = estadisticasRango === 'custom' ? `
       <div class="stat-range-custom">
-        <div><label>Desde</label><input type="date" id="estDesde" value="${estadisticasDesde}"></div>
-        <div><label>Hasta</label><input type="date" id="estHasta" value="${estadisticasHasta}"></div>
+        <div><label>Desde</label><div class="date-field"><input type="date" id="estDesde" value="${estadisticasDesde}"><span class="date-overlay">${formatFecha(estadisticasDesde)}</span></div></div>
+        <div><label>Hasta</label><div class="date-field"><input type="date" id="estHasta" value="${estadisticasHasta}"><span class="date-overlay">${formatFecha(estadisticasHasta)}</span></div></div>
       </div>` : '';
     const filtrosHtml = `<div class="chips">${chipsRango}</div>${customHtml}`;
 
@@ -1569,7 +1584,7 @@
       <select id="gPagador">${pagadorOpts}</select>
 
       <label>Fecha</label>
-      <input type="date" id="gFecha" value="${draft.fecha}">
+      <div class="date-field"><input type="date" id="gFecha" value="${draft.fecha}"><span class="date-overlay">${formatFecha(draft.fecha)}</span></div>
 
       <label>¿Cómo se divide?</label>
       <div class="chips">${modoChips}</div>
@@ -1644,7 +1659,7 @@
       <label>Monto</label>
       <input type="text" inputmode="decimal" id="stMonto" value="${ov.draft.monto}">
       <label>Fecha</label>
-      <input type="date" id="stFecha" value="${ov.draft.fecha}">
+      <div class="date-field"><input type="date" id="stFecha" value="${ov.draft.fecha}"><span class="date-overlay">${formatFecha(ov.draft.fecha)}</span></div>
       <label>Nota (opcional)</label>
       <input type="text" id="stNota" value="${escapeHtml(ov.draft.nota || '')}">
       ${ov.draft.error ? `<div class="field-error">${escapeHtml(ov.draft.error)}</div>` : ''}
@@ -1656,6 +1671,16 @@
   // ---- Eventos ----
   function wireEvents() {
     const app = document.getElementById('app');
+
+    // gFecha/stFecha no disparan un render() completo al cambiar (para no
+    // perder foco en otros campos del formulario), así que el overlay de
+    // fecha local necesita sincronizarse a mano con cada cambio del input.
+    document.querySelectorAll('.date-field').forEach((wrap) => {
+      const input = wrap.querySelector('input[type="date"]');
+      const overlay = wrap.querySelector('.date-overlay');
+      if (!input || !overlay) return;
+      input.addEventListener('input', () => { overlay.textContent = formatFecha(input.value); });
+    });
 
     on('#btnSendOtp', 'click', async () => {
       const email = (document.getElementById('emailInput').value || '').trim();
