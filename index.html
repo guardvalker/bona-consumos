@@ -299,7 +299,7 @@
     border-top: 3px solid var(--accent);
     padding: 1rem 1.1rem calc(1.5rem + env(safe-area-inset-bottom));
     overflow-y: auto; z-index: 11;
-    transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: translateY(100%); transition: transform 0.26s ease-out;
   }
   .overlay-sheet.open { transform: translateY(0); }
   .overlay-sheet-inner { max-width: 480px; margin: 0 auto; }
@@ -383,16 +383,16 @@
   @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(14px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
   @keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(10px); } }
 
-  /* ---- Animaciones: categoría elegida, guardar gasto, marcar pagado ---- */
+  /* ---- Animaciones: categoría elegida, guardar gasto, marcar pagado ----
+     A pedido del usuario: nada de "bump"/salto de escala en ventanas ni
+     botones — que se note en el color, no en el movimiento. */
   .category-tile {
-    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
-  .category-tile:active { transform: scale(0.92); }
-  .category-tile.active { animation: catPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
-  @keyframes catPop {
-    0% { transform: scale(0.82); }
-    60% { transform: scale(1.08); }
-    100% { transform: scale(1); }
+  .category-tile.active { animation: catGlow 0.4s ease-out; }
+  @keyframes catGlow {
+    0% { box-shadow: 0 0 0 0 var(--cat-color, var(--accent)); }
+    100% { box-shadow: 0 0 0 8px transparent; }
   }
 
   .success-burst {
@@ -400,16 +400,16 @@
     display: flex; align-items: center; justify-content: center;
     width: 84px; height: 84px; border-radius: 50%;
     background: var(--positive); color: var(--bg);
-    transform: translate(-50%, -50%) scale(0.4); opacity: 0;
-    animation: burstPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    transform: translate(-50%, -50%); opacity: 0;
+    animation: burstFade 0.7s ease-out forwards;
   }
   .success-burst svg { width: 42px; height: 42px; }
   .success-burst.coins { background: var(--ctp-yellow); font-size: 2.2rem; }
-  @keyframes burstPop {
-    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
-    30% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
-    70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  @keyframes burstFade {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
   }
 
   /* ---- Easter egg: el honguito que se asoma de costado ----
@@ -515,8 +515,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.7';
+  const APP_VERSION = '1.11.8';
   const CHANGELOG = [
+    { version: '1.11.8', fecha: '2026-09-27', notas: [
+      'Menos "salto" en las animaciones: los menús (Ajustes, Estadísticas, etc.) ahora solo se deslizan, sin rebote. Elegir categoría y confirmar un gasto/pago ya no hacen zoom, se nota en el color en vez de en el movimiento.',
+    ] },
     { version: '1.11.7', fecha: '2026-09-27', notas: [
       'El honguito secreto es todavía más discreto (más chico, más transparente), y ahora aparece en un lugar al azar (izquierda o derecha, altura random) cada vez que abrís la app y cada vez que lo tocás.',
     ] },
@@ -753,7 +756,7 @@
 
   // Circulito verde con check (guardar gasto) o de monedas (marcar pagado)
   // que aparece brevemente en el centro de la pantalla al confirmar. Se
-  // remueve solo cuando termina la animación CSS (burstPop).
+  // remueve solo cuando termina la animación CSS (burstFade).
   function successBurst(kind) {
     const el = document.createElement('div');
     el.className = kind === 'coins' ? 'success-burst coins' : 'success-burst';
