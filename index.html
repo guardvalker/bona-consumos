@@ -462,10 +462,10 @@
     0% { transform: translateY(0) rotate(0deg); opacity: 1; }
     100% { transform: translateY(115vh) rotate(360deg); opacity: 0.9; }
   }
-  .tear-drop { font-size: 18px; animation: tearFall 1s ease-in forwards; }
+  .tear-drop { font-size: 18px; animation: tearFall linear forwards; }
   @keyframes tearFall {
     0% { transform: translateY(0); opacity: 1; }
-    100% { transform: translateY(55px); opacity: 0; }
+    100% { transform: translateY(115vh); opacity: 0.9; }
   }
 </style>
 </head>
@@ -527,8 +527,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.10';
+  const APP_VERSION = '1.11.11';
   const CHANGELOG = [
+    { version: '1.11.11', fecha: '2026-09-27', notas: [
+      'Las lágrimas del honguito (saldo negativo) ahora caen desde arriba de toda la pantalla, igual que la lluvia de plata cuando el saldo es positivo.',
+    ] },
     { version: '1.11.10', fecha: '2026-09-27', notas: [
       'Segunda vuelta al fix de iOS: overscroll-behavior solo no alcanzaba. Se agregó touch-action:pan-y (bloquea el pan horizontal a nivel de gesto táctil, no solo de scroll) en toda la app y en el sheet de los menús, para el swipe de borde y el arrastre del sheet de "Cargar gasto".',
     ] },
@@ -845,15 +848,15 @@
     }
   }
 
-  function hongoLlora(mush) {
-    const rect = mush.getBoundingClientRect();
-    for (let i = 0; i < 5; i++) {
+  function hongoLlora() {
+    for (let i = 0; i < 12; i++) {
       const el = document.createElement('div');
       el.className = 'tear-drop';
       el.textContent = '💧';
-      el.style.top = `${rect.top + rect.height * 0.55}px`;
-      el.style.left = `${rect.left + rect.width * 0.25 + Math.random() * rect.width * 0.4}px`;
-      el.style.animationDelay = `${i * 0.15}s`;
+      el.style.left = `${Math.random() * 96}vw`;
+      el.style.fontSize = `${14 + Math.random() * 10}px`;
+      el.style.animationDuration = `${1.4 + Math.random() * 1}s`;
+      el.style.animationDelay = `${Math.random() * 0.4}s`;
       document.body.appendChild(el);
       el.addEventListener('animationend', () => el.remove());
     }
@@ -873,7 +876,7 @@
       lloverDinero();
     } else if (balance < -0.005) {
       mush.classList.add('sad');
-      hongoLlora(mush);
+      hongoLlora();
     } else {
       toast('Todo saldado ✓');
     }
