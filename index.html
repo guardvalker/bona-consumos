@@ -123,6 +123,16 @@
   button, input, select, textarea { font-family: inherit; }
   button { touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
 
+  /* Tapa fija del área de la status bar (iOS, black-translucent): sin esto el
+     contenido que scrollea pasa por debajo de la hora/batería y se ve
+     difuminado/mezclado con ella. Alto 0 donde no hay safe-area. */
+  .status-cover {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: env(safe-area-inset-top);
+    background: var(--bg);
+    z-index: 9; pointer-events: none;
+  }
+
   #app {
     max-width: 480px;
     margin: 0 auto;
@@ -494,6 +504,7 @@
 </head>
 <body>
 
+<div class="status-cover"></div>
 <div class="pull-refresh" id="pullRefresh"></div>
 <div id="app"></div>
 <div class="overlay-backdrop" id="overlayBackdrop"></div>
@@ -551,8 +562,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.13.1';
+  const APP_VERSION = '1.13.2';
   const CHANGELOG = [
+    { version: '1.13.2', fecha: '2026-10-01', notas: [
+      'Fix iOS: al scrollear, el contenido ya no pasa por debajo de la hora/batería (se veía difuminado con la barra superior). Ahora esa franja queda sólida con el color de fondo.',
+    ] },
     { version: '1.13.1', fecha: '2026-10-01', notas: [
       'Ahora podés actualizar los datos deslizando la pantalla hacia abajo desde el tope (igual que en Lista Super y Gym): aparece un ícono circular y se vuelve a sincronizar el grupo sin recargar la app.',
     ] },
