@@ -537,8 +537,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.12.1';
+  const APP_VERSION = '1.12.2';
   const CHANGELOG = [
+    { version: '1.12.2', fecha: '2026-10-01', notas: [
+      'Fix: la pantalla de ingreso decía "Código de 6 dígitos" pero el código que llega por email es de 8. Ahora dice 8, y si pegás el código con espacios (ej. "1234 5678") también lo toma.',
+    ] },
     { version: '1.12.1', fecha: '2026-10-01', notas: [
       'Ajustes ahora muestra con qué email tenés la sesión iniciada.',
       'Al unirte a un grupo (por link o a mano) la app te avisa con qué email te vas a unir y te deja cambiar de cuenta antes de confirmar. Si abrís un link de un grupo del que ya sos miembro, entra directo.',
@@ -958,8 +961,8 @@
         <h1>bonapp-gastos</h1>
         <p class="tagline">Te mandamos un código a ${authEmail}</p>
         <div class="card">
-          <label>Código de 6 dígitos</label>
-          <input type="text" id="codeInput" inputmode="numeric" placeholder="123456" maxlength="8">
+          <label>Código de 8 dígitos</label>
+          <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="12345678" maxlength="12">
           ${authError ? `<div class="field-error">${authError}</div>` : ''}
           <div class="btn-block-row">
             <button class="btn btn-primary" id="btnVerifyOtp" ${authBusy ? 'disabled' : ''}>${authBusy ? 'Confirmando…' : 'Confirmar'}</button>
@@ -1978,7 +1981,7 @@
     on('#btnBackToEmail', 'click', () => { authStep = 'email'; authError = ''; render(); });
 
     on('#btnVerifyOtp', 'click', async () => {
-      const code = (document.getElementById('codeInput').value || '').trim();
+      const code = (document.getElementById('codeInput').value || '').replace(/\s+/g, '');
       if (!code) { authError = 'Ingresá el código'; return render(); }
       authBusy = true; authError = ''; render();
       try {
