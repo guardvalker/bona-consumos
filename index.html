@@ -535,8 +535,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.11.12';
+  const APP_VERSION = '1.12.0';
   const CHANGELOG = [
+    { version: '1.12.0', fecha: '2026-10-01', notas: [
+      'Cada app de BONA ahora guarda su propia sesión: antes todas compartían una sola, así que esta app podía abrirse con el email de otra (y no mostrarte tus grupos). Vas a tener que iniciar sesión una vez más; usá el mismo email de siempre y tus grupos y gastos están como los dejaste.',
+    ] },
     { version: '1.11.12', fecha: '2026-09-27', notas: [
       'Encontrado el motivo real de que el sheet de los menús (sobre todo "Cargar gasto") se sintiera arrastrable en iOS: combinaba position:fixed con transform para el slide, una combinación con bug conocido en Safari. Se cambió a animar con otra propiedad — ahora el sheet queda fijo de verdad.',
     ] },
