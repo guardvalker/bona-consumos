@@ -107,6 +107,19 @@
     overscroll-behavior: none;
     touch-action: pan-y;
   }
+  /* Pull-to-refresh propio (el nativo del navegador está bloqueado por
+     overscroll-behavior): solo dispara Sync.pullNow(), no recarga la página. */
+  .pull-refresh {
+    position: fixed; top: calc(4px + env(safe-area-inset-top)); left: 50%;
+    width: 36px; height: 36px; margin-left: -18px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25); z-index: 30;
+    opacity: 0; transform: translateY(-46px); pointer-events: none;
+  }
+  .pull-refresh svg { width: 17px; height: 17px; color: var(--accent, var(--ctp-mauve)); transform: rotate(calc(var(--pull-progress, 0) * 220deg)); }
+  .pull-refresh.spinning svg { animation: pull-refresh-spin 0.7s linear infinite; }
+  @keyframes pull-refresh-spin { to { transform: rotate(360deg); } }
   button, input, select, textarea { font-family: inherit; }
   button { touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
 
@@ -481,6 +494,7 @@
 </head>
 <body>
 
+<div class="pull-refresh" id="pullRefresh"></div>
 <div id="app"></div>
 <div class="overlay-backdrop" id="overlayBackdrop"></div>
 <div class="overlay-sheet" id="overlaySheet"><div class="overlay-sheet-inner" id="overlayBody"></div></div>
@@ -537,8 +551,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.13.0';
+  const APP_VERSION = '1.13.1';
   const CHANGELOG = [
+    { version: '1.13.1', fecha: '2026-10-01', notas: [
+      'Ahora podés actualizar los datos deslizando la pantalla hacia abajo desde el tope (igual que en Lista Super y Gym): aparece un ícono circular y se vuelve a sincronizar el grupo sin recargar la app.',
+    ] },
     { version: '1.13.0', fecha: '2026-10-01', notas: [
       'Los pagos saldados ahora se pueden editar y eliminar: tocá un pago en el historial para cambiar quién pagó, a quién, monto, fecha o nota, o para borrarlo. Los saldos se recalculan solos.',
     ] },
@@ -2478,6 +2495,58 @@
   // controla updateMushroomVisibility() en cada render(), no se recrea nunca.
   document.getElementById('mushroomImg').src = MUSHROOM_IMG;
   document.getElementById('mushroomPeek').addEventListener('click', onMushroomTap);
+
+  // ---- Pull-to-refresh: arrastrar hacia abajo desde el tope fuerza un re-sync ----
+  (function setupPullToRefresh() {
+    const el = document.getElementById('pullRefresh');
+    el.innerHTML = refreshIconSvg();
+    const THRESHOLD = 68, MAX_DRAG = 100;
+    let startY = null, dragging = false, refreshing = false;
+
+    const canPull = () => !refreshing && !overlay && window.scrollY <= 0 &&
+      window.Sync.isConfigured() && window.Sync.getUser() && window.Sync.getGrupoId();
+    function setProgress(p) {
+      el.style.setProperty('--pull-progress', p);
+      el.style.opacity = String(Math.min(p * 1.4, 1));
+      el.style.transform = `translateY(${-46 + Math.min(p, 1) * 62}px)`;
+    }
+    function reset() {
+      el.style.transition = 'transform .2s ease, opacity .2s ease';
+      setProgress(0);
+      dragging = false; startY = null;
+      setTimeout(() => { el.style.transition = ''; }, 220);
+    }
+    function doRefresh() {
+      refreshing = true; dragging = false; startY = null;
+      el.style.transition = 'transform .15s ease, opacity .15s ease';
+      setProgress(1);
+      el.classList.add('spinning');
+      window.Sync.pullNow().finally(() => setTimeout(() => {
+        el.classList.remove('spinning');
+        el.style.transition = 'transform .2s ease, opacity .2s ease';
+        setProgress(0);
+        refreshing = false;
+      }, 350));
+    }
+    document.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length !== 1 || !canPull()) { startY = null; dragging = false; return; }
+      startY = ev.touches[0].clientY; dragging = true;
+    }, { passive: true });
+    document.addEventListener('touchmove', (ev) => {
+      if (!dragging || startY === null || refreshing) return;
+      if (window.scrollY > 0 || overlay) { reset(); return; }
+      const dy = ev.touches[0].clientY - startY;
+      if (dy <= 0) { setProgress(0); return; }
+      el.style.transition = 'none';
+      setProgress(Math.min(dy, MAX_DRAG) / THRESHOLD);
+    }, { passive: true });
+    document.addEventListener('touchend', () => {
+      if (!dragging) return;
+      const progress = parseFloat(el.style.getPropertyValue('--pull-progress')) || 0;
+      if (progress >= 1 && !refreshing) doRefresh(); else reset();
+    });
+    document.addEventListener('touchcancel', () => { if (dragging) reset(); });
+  })();
 
   if (!window.Sync.isConfigured()) {
     document.getElementById('app').innerHTML = `<div class="empty-state">Falta configurar Supabase en config.js</div>`;
