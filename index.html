@@ -362,6 +362,8 @@
   .member-line:last-child { border-bottom: none; }
 
   .app-info { text-align: center; margin-bottom: 1.5rem; }
+  .join-who { color: var(--text-dim); font-size: 0.9rem; margin: 0.75rem 0 1rem; }
+  .session-email { color: var(--text-dim); font-size: 0.95rem; margin-bottom: 1.25rem; word-break: break-all; }
   .app-name { font-weight: 700; font-size: 1.7rem; }
   .version-row { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.4rem; }
   .version-btn {
@@ -535,8 +537,12 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.12.0';
+  const APP_VERSION = '1.12.1';
   const CHANGELOG = [
+    { version: '1.12.1', fecha: '2026-10-01', notas: [
+      'Ajustes ahora muestra con qué email tenés la sesión iniciada.',
+      'Al unirte a un grupo (por link o a mano) la app te avisa con qué email te vas a unir y te deja cambiar de cuenta antes de confirmar. Si abrís un link de un grupo del que ya sos miembro, entra directo.',
+    ] },
     { version: '1.12.0', fecha: '2026-10-01', notas: [
       'Cada app de BONA ahora guarda su propia sesión: antes todas compartían una sola, así que esta app podía abrirse con el email de otra (y no mostrarte tus grupos). Vas a tener que iniciar sesión una vez más; usá el mismo email de siempre y tus grupos y gastos están como los dejaste.',
     ] },
@@ -1581,9 +1587,11 @@
     return `
       <div class="sheet-header"><h2>Unirme a un grupo</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>Pegá el link o el código que te compartieron</label>
-      <input type="text" id="jgInput" placeholder="https://…?grupo=…">
+      <input type="text" id="jgInput" placeholder="https://…?grupo=…" value="${escapeHtml((overlay.draft && overlay.draft.input) || '')}">
+      <p class="join-who">Te vas a unir como <b>${escapeHtml(user ? user.email : '')}</b>. Si ya eras parte del grupo con otro email, no vas a ver tus gastos: usá esa cuenta.</p>
       <div class="btn-block-row">
         <button class="btn btn-primary" id="btnConfirmarUnirse">Unirme</button>
+        <button class="btn btn-secondary" id="btnOtraCuenta">Usar otra cuenta</button>
       </div>`;
   }
 
@@ -1603,6 +1611,9 @@
           <button class="icon-btn update-btn" id="btnActualizar" title="Buscar actualización">${refreshIconSvg()}</button>
         </div>
       </div>
+
+      <label>Sesión iniciada como</label>
+      <div class="session-email">${escapeHtml(user ? user.email : '—')}</div>
 
       <label>Tu alias</label>
       <input type="text" id="aliasInput" value="${escapeHtml(window.Sync.getMyAlias())}" placeholder="${escapeHtml(user ? user.email : '')}">
@@ -2014,6 +2025,13 @@
       } catch (e) { toast(e.message || 'No se pudo unir al grupo'); }
     });
 
+    on('#btnOtraCuenta', 'click', async () => {
+      // Guardamos el link para retomarlo después de iniciar sesión con la otra cuenta.
+      const input = (document.getElementById('jgInput').value || '').trim();
+      pendingJoinCode = window.Sync.extractGrupoId(input) || pendingJoinCode;
+      await window.Sync.signOut();
+    });
+
     on('#btnAjustes', 'click', () => openOverlay({ type: 'ajustes' }));
     on('#btnVerVersiones', 'click', () => openOverlay({ type: 'versiones' }));
 
@@ -2365,11 +2383,17 @@
         if (view === 'auth' || view === 'loading') {
           view = 'loading';
           if (pendingJoinCode) {
+            // No nos unimos solos: si la sesión es de otro email, uniría una
+            // persona nueva en vez de abrir tu grupo. Si ya sos miembro,
+            // abrimos el grupo directo; si no, pedimos confirmar con el email.
             const code = pendingJoinCode; pendingJoinCode = null;
-            window.Sync.joinGrupo(code).catch((e) => {
-              toast(e.message || 'No se pudo unir al grupo');
-              view = 'home'; render();
-            });
+            refreshMisGrupos().then(() => {
+              if (misGrupos.some((g) => g.id === code)) {
+                return window.Sync.selectGrupo(code);
+              }
+              view = 'home';
+              openOverlay({ type: 'unirseGrupo', draft: { input: code } });
+            }).catch((e) => { toast(e.message || 'No se pudo abrir el grupo'); view = 'home'; render(); });
           } else {
             refreshMisGrupos({ autoPickIfNone: true });
           }

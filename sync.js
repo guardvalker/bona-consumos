@@ -525,6 +525,7 @@ window.Sync = (function () {
     deleteGrupo,
     selectGrupo,
     pendingJoinCodeFromUrl,
+    extractGrupoId,
     pullNow,
     saveGasto,
     deleteGasto,
