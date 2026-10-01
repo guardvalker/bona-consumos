@@ -254,7 +254,7 @@
   .gasto-row.pago .cat-icon { background: color-mix(in srgb, var(--ctp-green) 16%, var(--card)); }
   .gasto-row.pago .cat-icon svg { color: var(--ctp-green); }
   .gasto-row.pago .monto { color: var(--ctp-green); }
-  .gasto-row[data-edit-gasto] { cursor: pointer; }
+  .gasto-row[data-edit-gasto], .gasto-row[data-edit-pago] { cursor: pointer; }
 
   .filter-bar {
     display: flex; align-items: center; gap: 0.6rem;
@@ -537,8 +537,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.12.2';
+  const APP_VERSION = '1.13.0';
   const CHANGELOG = [
+    { version: '1.13.0', fecha: '2026-10-01', notas: [
+      'Los pagos saldados ahora se pueden editar y eliminar: tocá un pago en el historial para cambiar quién pagó, a quién, monto, fecha o nota, o para borrarlo. Los saldos se recalculan solos.',
+    ] },
     { version: '1.12.2', fecha: '2026-10-01', notas: [
       'Fix: la pantalla de ingreso decía "Código de 6 dígitos" pero el código que llega por email es de 8. Ahora dice 8, y si pegás el código con espacios (ej. "1234 5678") también lo toma.',
     ] },
@@ -1065,7 +1068,7 @@
           if (m.tipo === 'pago') {
             const st = m.st;
             return `
-              <div class="gasto-row pago" style="--payer-color:${colorForUser(st.deUsuarioId)}">
+              <div class="gasto-row pago" data-edit-pago="${st.id}" style="--payer-color:${colorForUser(st.deUsuarioId)}">
                 <div class="cat-icon">${checkIconSvg()}</div>
                 <div class="mid">
                   <div class="desc">${escapeHtml(payerName(st.deUsuarioId))} le pagó a ${escapeHtml(payerName(st.aUsuarioId))}</div>
@@ -1935,7 +1938,7 @@
     const opts = miembros.map((m) => `<option value="${m.usuarioId}" ${ov.draft.deUsuarioId === m.usuarioId ? 'selected' : ''}>${escapeHtml(displayName(m.usuarioId))}</option>`);
     const optsA = miembros.map((m) => `<option value="${m.usuarioId}" ${ov.draft.aUsuarioId === m.usuarioId ? 'selected' : ''}>${escapeHtml(displayName(m.usuarioId))}</option>`);
     return `
-      <div class="sheet-header"><h2>Marcar como pagado</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
+      <div class="sheet-header"><h2>${ov.editId ? 'Editar pago' : 'Marcar como pagado'}</h2><button class="icon-btn" id="btnCerrarOverlay">${closeIconSvg()}</button></div>
       <label>¿Quién pagó?</label>
       <select id="stDe">${opts.join('')}</select>
       <label>¿A quién?</label>
@@ -1949,6 +1952,7 @@
       ${ov.draft.error ? `<div class="field-error">${escapeHtml(ov.draft.error)}</div>` : ''}
       <div class="btn-block-row">
         <button class="btn btn-primary" id="btnConfirmarSettle">Guardar</button>
+        ${ov.editId ? `<button class="btn btn-danger" id="btnEliminarSettle">Eliminar pago</button>` : ''}
       </div>`;
   }
 
@@ -2307,6 +2311,23 @@
       catch (e) { toast(e.message || 'No se pudo eliminar'); }
     });
 
+    on('[data-edit-pago]', 'click', (el) => {
+      const st = settlements.find((x) => x.id === el.getAttribute('data-edit-pago'));
+      if (!st) return;
+      openOverlay({
+        type: 'settle',
+        editId: st.id,
+        draft: { deUsuarioId: st.deUsuarioId, aUsuarioId: st.aUsuarioId, monto: st.monto, fecha: st.fecha, nota: st.nota || '', moneda: st.moneda, error: '' },
+      });
+    });
+
+    on('#btnEliminarSettle', 'click', async () => {
+      if (!overlay || !overlay.editId) return;
+      if (!confirm('¿Eliminar este pago? Los saldos se recalculan.')) return;
+      try { await window.Sync.deleteSettlement(overlay.editId); closeOverlay(); }
+      catch (e) { toast(e.message || 'No se pudo eliminar'); }
+    });
+
     on('[data-settle-idx]', 'click', (el) => {
       const balances = L.calcularBalances({
         gastos: gastos.map((g) => ({ pagadoPor: g.pagadoPor, montoBase: g.montoBase })),
@@ -2330,11 +2351,13 @@
       if (de === a) return toast('Elegí dos personas distintas');
       if (!monto || monto <= 0) return toast('Ingresá un monto válido');
       try {
+        const editId = overlay && overlay.editId;
         await window.Sync.saveSettlement({
-          id: uid(), deUsuarioId: de, aUsuarioId: a, monto, moneda: grupoActivo.monedaBase, fecha, nota,
-        });
+          id: editId || uid(), deUsuarioId: de, aUsuarioId: a, monto,
+          moneda: (editId && overlay.draft.moneda) || grupoActivo.monedaBase, fecha, nota,
+        }, !!editId);
         closeOverlay();
-        successBurst('coins');
+        if (!editId) successBurst('coins');
       } catch (e) { toast(e.message || 'No se pudo guardar'); }
     });
 

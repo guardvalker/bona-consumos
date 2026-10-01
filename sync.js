@@ -442,19 +442,24 @@ window.Sync = (function () {
     await pullNow();
   }
 
-  async function saveSettlement(settlement) {
+  async function saveSettlement(settlement, isUpdate = false) {
     if (!sb || !grupoId || !currentUser) throw new Error('No hay grupo activo');
-    const { error } = await sb.from('gc_settlements').insert({
-      id: settlement.id || crypto.randomUUID(),
-      grupo_id: grupoId,
+    const campos = {
       de_usuario_id: settlement.deUsuarioId,
       a_usuario_id: settlement.aUsuarioId,
       monto: settlement.monto,
       moneda: settlement.moneda,
       fecha: settlement.fecha,
       nota: settlement.nota || null,
-      creado_por: currentUser.id,
-    });
+    };
+    const { error } = isUpdate
+      ? await sb.from('gc_settlements').update(campos).eq('id', settlement.id)
+      : await sb.from('gc_settlements').insert({
+          id: settlement.id || crypto.randomUUID(),
+          grupo_id: grupoId,
+          ...campos,
+          creado_por: currentUser.id,
+        });
     if (error) throw error;
     await pullNow();
   }
