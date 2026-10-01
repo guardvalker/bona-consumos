@@ -123,26 +123,22 @@
   button, input, select, textarea { font-family: inherit; }
   button { touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
 
-  /* Tapa fija del área de la status bar (iOS, black-translucent): sin esto el
-     contenido que scrollea pasa por debajo de la hora/batería y se ve
-     difuminado/mezclado con ella. Alto 0 donde no hay safe-area. */
-  .status-cover {
-    position: fixed; top: 0; left: 0; right: 0;
-    height: env(safe-area-inset-top);
-    background: var(--bg);
-    z-index: 9; pointer-events: none;
-  }
-
+  /* #app es el contenedor de scroll (no la ventana) y arranca justo debajo de
+     la status bar: en iOS 26 todo contenido que scrollea por debajo del área
+     segura recibe el efecto de borde del sistema (blur/fade sobre los
+     primeros ~70px, se veía borroso el selector de grupo y el engranaje), y
+     eso no se puede apagar desde la web — la única forma es que nada
+     scrollee ahí abajo. */
+  html, body { height: 100%; overflow: hidden; }
   #app {
+    position: fixed;
+    top: env(safe-area-inset-top); bottom: 0; left: 0; right: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     max-width: 480px;
     margin: 0 auto;
-    min-height: 100vh;
     padding: 1rem 1rem 6rem;
-    /* En iOS instalada como PWA (status bar "black-translucent" +
-       viewport-fit=cover), el contenido arranca debajo del notch/batería si
-       no se le suma el safe-area-inset-top acá — el max() mantiene el
-       padding de 1rem normal en Android/desktop, donde ese inset es 0. */
-    padding-top: max(1rem, env(safe-area-inset-top));
+    /* El safe-area de arriba ya está en `top` de arriba; acá solo los costados (landscape). */
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
@@ -504,7 +500,6 @@
 </head>
 <body>
 
-<div class="status-cover"></div>
 <div class="pull-refresh" id="pullRefresh"></div>
 <div id="app"></div>
 <div class="overlay-backdrop" id="overlayBackdrop"></div>
@@ -562,8 +557,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.13.2';
+  const APP_VERSION = '1.13.3';
   const CHANGELOG = [
+    { version: '1.13.3', fecha: '2026-10-01', notas: [
+      'Fix iOS 26: el selector de grupo y el engranaje de arriba se veían borrosos/difuminados contra la barra de estado. Ahora el scroll vive dentro de la app, debajo de la barra, así el sistema ya no aplica su efecto de difuminado de borde. Reemplaza la franja sólida de 1.13.2.',
+    ] },
     { version: '1.13.2', fecha: '2026-10-01', notas: [
       'Fix iOS: al scrollear, el contenido ya no pasa por debajo de la hora/batería (se veía difuminado con la barra superior). Ahora esa franja queda sólida con el color de fondo.',
     ] },
@@ -1452,28 +1450,17 @@
   // overflow:hidden en el body no alcanza en iOS instalado como PWA (sigue
   // habiendo rubber-band), así que se lo saca del flujo con position:fixed
   // guardando el scroll actual, y se lo restaura tal cual al cerrar.
-  let scrollLockY = 0;
-  let scrollLocked = false;
+    let scrollLocked = false;
   function applyOverlayVisibility() {
     const abierto = !!overlay;
     document.getElementById('overlayBackdrop').classList.toggle('open', abierto);
     document.getElementById('overlaySheet').classList.toggle('open', abierto);
     if (abierto && !scrollLocked) {
-      scrollLockY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollLockY}px`;
-      document.body.style.left = '0';
-      document.body.style.right = '0';
-      document.documentElement.style.overflow = 'hidden';
+      document.getElementById('app').style.overflowY = 'hidden';
       scrollLocked = true;
     } else if (!abierto && scrollLocked) {
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      document.documentElement.style.overflow = '';
+      document.getElementById('app').style.overflowY = '';
       scrollLocked = false;
-      window.scrollTo(0, scrollLockY);
     }
   }
 
@@ -2517,7 +2504,7 @@
     const THRESHOLD = 68, MAX_DRAG = 100;
     let startY = null, dragging = false, refreshing = false;
 
-    const canPull = () => !refreshing && !overlay && window.scrollY <= 0 &&
+    const canPull = () => !refreshing && !overlay && document.getElementById('app').scrollTop <= 0 &&
       window.Sync.isConfigured() && window.Sync.getUser() && window.Sync.getGrupoId();
     function setProgress(p) {
       el.style.setProperty('--pull-progress', p);
@@ -2548,7 +2535,7 @@
     }, { passive: true });
     document.addEventListener('touchmove', (ev) => {
       if (!dragging || startY === null || refreshing) return;
-      if (window.scrollY > 0 || overlay) { reset(); return; }
+      if (document.getElementById('app').scrollTop > 0 || overlay) { reset(); return; }
       const dy = ev.touches[0].clientY - startY;
       if (dy <= 0) { setProgress(0); return; }
       el.style.transition = 'none';
