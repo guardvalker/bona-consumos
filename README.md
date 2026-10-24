@@ -1,4 +1,4 @@
-# bonapp-gastos
+# BonaCuentas
 
 **App:** https://guardvalker.github.io/bona-consumos/
 

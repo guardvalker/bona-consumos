@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>bonapp-gastos</title>
+<title>BonaCuentas</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1e1e2e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="bonapp-gastos">
+<meta name="apple-mobile-web-app-title" content="BonaCuentas">
 <meta name="mobile-web-app-capable" content="yes">
 <script>
   (function() {
@@ -557,8 +557,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.13.4';
+  const APP_VERSION = '1.13.5';
   const CHANGELOG = [
+    { version: '1.13.5', fecha: '2026-10-24', notas: [
+      'La app pasa a llamarse BonaCuentas (antes bonapp-gastos). Si la tenés instalada en el inicio, el nombre nuevo aparece al volver a agregarla.',
+    ] },
     { version: '1.13.4', fecha: '2026-10-24', notas: [
       'Nuevo ícono de la app: un honguito contador con su escritorio, billetes y bolsas de monedas, sobre el fondo oscuro de la app.',
     ] },
@@ -979,7 +982,7 @@
     if (authStep === 'email') {
       return `
         <div class="auth-wrap">
-          <h1>bonapp-gastos</h1>
+          <h1>BonaCuentas</h1>
           <p class="tagline">Gastos compartidos, sin vueltas.</p>
           <div class="card">
             <label>Tu email</label>
@@ -993,7 +996,7 @@
     }
     return `
       <div class="auth-wrap">
-        <h1>bonapp-gastos</h1>
+        <h1>BonaCuentas</h1>
         <p class="tagline">Te mandamos un código a ${authEmail}</p>
         <div class="card">
           <label>Código de 8 dígitos</label>
@@ -1632,7 +1635,7 @@
       </div>
 
       <div class="app-info">
-        <div class="app-name">bonapp-gastos</div>
+        <div class="app-name">BonaCuentas</div>
         <div class="version-row">
           <button class="version-btn" id="btnVerVersiones">v${APP_VERSION}</button>
           <button class="icon-btn update-btn" id="btnActualizar" title="Buscar actualización">${refreshIconSvg()}</button>
