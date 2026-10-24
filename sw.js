@@ -1,4 +1,4 @@
-const CACHE = "bonacuentas-v39";
+const CACHE = "bonacuentas-v40";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./config.js", "./logic.js", "./charts.js", "./sync.js"];
 
 self.addEventListener("install", (event) => {
