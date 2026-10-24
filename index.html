@@ -557,8 +557,11 @@
   // Bumpear en cada push, sin excepción — no importa el tamaño del cambio
   // (mismo criterio que lista-super, ver memoria "changelog discipline").
   // Entrada más nueva primero.
-  const APP_VERSION = '1.13.3';
+  const APP_VERSION = '1.13.4';
   const CHANGELOG = [
+    { version: '1.13.4', fecha: '2026-10-24', notas: [
+      'Nuevo ícono de la app: un honguito contador con su escritorio, billetes y bolsas de monedas, sobre el fondo oscuro de la app.',
+    ] },
     { version: '1.13.3', fecha: '2026-10-01', notas: [
       'Fix iOS 26: el selector de grupo y el engranaje de arriba se veían borrosos/difuminados contra la barra de estado. Ahora el scroll vive dentro de la app, debajo de la barra, así el sistema ya no aplica su efecto de difuminado de borde. Reemplaza la franja sólida de 1.13.2.',
     ] },
